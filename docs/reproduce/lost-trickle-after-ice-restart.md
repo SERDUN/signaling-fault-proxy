@@ -5,8 +5,8 @@
 A call is up. The media path breaks, the app restarts ICE: it sends `update` with a new offer and
 trickles its new candidates. If the signaling session goes down while a candidate request is still
 waiting for Core's answer, the request fails with `WebtritSignalingTransactionTerminateByDisconnectException`.
-`__onMutationTrickleIce` treated that as a fatal error and ended the call - on its own, while Core
-still held it.
+[`__onMutationTrickleIce`](https://github.com/SERDUN/work-mirror/blob/mobile-app/master/phone/lib/features/call/bloc/call_bloc.dart)
+treated that as a fatal error and ended the call - on its own, while Core still held it.
 
 On real networks the session goes down that way when the client's keepalive gets no reply and every
 queued transaction is terminated (4502). That lines up only by chance, so the bug shows rarely and
