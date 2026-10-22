@@ -1,0 +1,24 @@
+[project]
+name = "signaling-fault-proxy"
+version = "0.1.0"
+description = "Reverse proxy between the WebTrit app and any Core that breaks the signaling on purpose"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = ["mitmproxy>=11"]
+
+[project.scripts]
+signaling-fault-proxy = "signaling_fault_proxy.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 110
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
