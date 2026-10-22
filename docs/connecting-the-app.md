@@ -23,6 +23,10 @@ Core's.
    phone's Wi-Fi or mobile data changes only the media path - the trick most reproductions rely on.
    Wireless adb works too, but then the tunnel depends on the Wi-Fi you may want to switch off.
 
+   If port 8080 is taken on the computer, run the proxy on another one and keep the phone's side:
+   `--port 8088` and `adb -s <serial> reverse tcp:8080 tcp:8088` - an app built with
+   `http://127.0.0.1:8080` needs no rebuild.
+
 3. Make the app use `http://127.0.0.1:8080` as its Core, one of:
    - **sign-in screen** - when the build lets you enter a Core address, enter `http://127.0.0.1:8080`;
    - **build** - build the app with the Core built in and plain HTTP allowed to it:

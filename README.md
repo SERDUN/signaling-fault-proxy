@@ -95,6 +95,9 @@ app -> core request:ice_trickle tx=transaction-4037598838  [close by close-trick
 
 The journal of a run is the proxy's side of the evidence; the app's log is the other.
 
+The journal keeps each frame's direction, kind, name and transaction, not its body: an SDP (which codec a
+renegotiation settled on, say) is read from the app's log, not from the journal.
+
 ## Reproductions
 
 Step-by-step recipes with the expected result on a build with the bug and on a fixed one, made to be
