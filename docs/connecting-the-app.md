@@ -34,7 +34,7 @@ Core's.
      ```
 
      (with the rest of your usual `--dart-define-from-file`). `127.0.0.1` is in the default allowed
-     domains of the WebTrit app, so plain HTTP to the proxy is accepted.
+     domains of the app, so plain HTTP to the proxy is accepted.
 
 4. Sign in. If the app was signed in to the real Core before, sign out first: a session remembers the
    Core it was opened on, and would keep going there directly.

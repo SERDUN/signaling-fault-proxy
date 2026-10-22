@@ -1,1 +1,1 @@
-"""Reverse proxy between the WebTrit app and any Core that breaks the signaling on purpose."""
+"""Reverse proxy between the PortaPhone app and any Core that breaks the signaling on purpose."""

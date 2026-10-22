@@ -46,7 +46,7 @@ curl 'http://127.0.0.1:8080/__proxy/arm?rule=drop-on&from=core&name=keepalive&ti
 curl 'http://127.0.0.1:8080/__proxy/arm?rule=close-on&from=core&name=accepted&after=update'
 ```
 
-Frame names are the WebTrit signaling protocol's: a request's `request` field, a response's
+Frame names are those of the app's signaling protocol: a request's `request` field, a response's
 `response`, an event's `event`, a handshake's `handshake`. The proxy's log shows them for every
 frame (`app -> core request:update ...`), which is the quickest way to find the one you need.
 

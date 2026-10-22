@@ -1,6 +1,6 @@
 # signaling-fault-proxy
 
-A reverse proxy between the [WebTrit](https://github.com/WebTrit/webtrit_phone) app and its Core
+A reverse proxy between the PortaPhone mobile app and its Core
 that breaks the signaling on purpose - by rule, at the exact message a bug needs, instead of by a
 timer or by cutting the phone's network.
 

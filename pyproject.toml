@@ -1,7 +1,7 @@
 [project]
 name = "signaling-fault-proxy"
 version = "0.1.0"
-description = "Reverse proxy between the WebTrit app and any Core that breaks the signaling on purpose"
+description = "Reverse proxy between the PortaPhone app and any Core that breaks the signaling on purpose"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
