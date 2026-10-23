@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>signaling-fault-proxy</title>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --line:#2a2f3a; --fg:#e6e9ef; --muted:#9aa4b2;
+          --accent:#5CACE3; --ok:#3fb950; --err:#f85149; --warn:#d29922; }
+  :root:not([data-theme="dark"]) { }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+          --bg:#f6f7f9; --panel:#fff; --line:#e3e6ea; --fg:#1f2430; --muted:#6b7280; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .wrap { max-width:720px; margin:0 auto; padding:16px; }
+  h1 { font-size:16px; margin:0 0 2px; }
+  .sub { color:var(--muted); font-size:12px; margin:0 0 16px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:14px; }
+  .card h2 { font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:0 0 12px; }
+  label { display:block; font-size:12px; color:var(--muted); margin:10px 0 4px; }
+  input { width:100%; background:var(--bg); color:var(--fg); border:1px solid var(--line);
+          border-radius:8px; padding:9px 10px; font:inherit; }
+  input:focus { border-color:var(--accent); outline:none; }
+  .row { display:flex; gap:8px; }
+  .row > * { flex:1; }
+  button { background:var(--accent); color:#06121c; border:0; border-radius:8px; padding:9px 14px;
+           font:inherit; font-weight:600; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--fg); border:1px solid var(--line); font-weight:400; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .mt { margin-top:12px; }
+  .pill { display:inline-block; padding:1px 9px; border-radius:999px; font-size:11px; font-weight:600; }
+  .pill.on { background:rgba(63,185,80,.16); color:var(--ok); }
+  .pill.off { background:rgba(148,163,184,.16); color:var(--muted); }
+  .kv { display:flex; justify-content:space-between; gap:12px; padding:5px 0; border-bottom:1px solid var(--line); }
+  .kv:last-child { border-bottom:0; }
+  .kv .k { color:var(--muted); }
+  .rule { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); }
+  .rule:last-child { border-bottom:0; }
+  .rule .name { word-break:break-all; }
+  .toggle { min-width:72px; }
+  #msg { min-height:18px; font-size:12px; margin-top:8px; }
+  #msg.ok { color:var(--ok); } #msg.err { color:var(--err); }
+  a { color:var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>signaling-fault-proxy</h1>
+  <p class="sub">Point the app's Core at this proxy. Set the real Core and the signup account below; arm a fault to break the signaling.</p>
+
+  <div class="card">
+    <h2>Status</h2>
+    <div class="kv"><span class="k">Core</span><span id="st-core">-</span></div>
+    <div class="kv"><span class="k">signup-as-login</span><span id="st-signup">-</span></div>
+    <div class="kv"><span class="k">live signaling</span><span id="st-conns">-</span></div>
+    <div class="kv"><span class="k">armed faults</span><span id="st-armed">-</span></div>
+  </div>
+
+  <div class="card" id="tokenCard" style="display:none">
+    <h2>Control token</h2>
+    <input id="token" type="password" placeholder="this instance requires a token">
+  </div>
+
+  <div class="card">
+    <h2>Core</h2>
+    <label for="core">Upstream Core URL</label>
+    <div class="row">
+      <input id="core" placeholder="https://core.example.com">
+      <button class="toggle" onclick="setCore()">Save</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Custom-signup credentials</h2>
+    <p class="sub" style="margin:0 0 4px">Held only in this running proxy, never stored. A login/password in the signup body still wins per request.</p>
+    <label for="login">Login</label>
+    <input id="login" placeholder="account">
+    <label for="password">Password</label>
+    <input id="password" type="password" placeholder="password">
+    <div class="row mt">
+      <button onclick="setSignup()">Save</button>
+      <button class="ghost" onclick="clearSignup()">Clear</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Faults (tests)</h2>
+    <div id="rules"></div>
+  </div>
+
+  <div id="msg"></div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const base = location.pathname.replace(/\/[^/]*$/, "/");  // the /__proxy/ this page is served under
+
+  function token() { return $("token").value.trim(); }
+  function withToken(params) { const t = token(); if (t) params.set("token", t); return params; }
+
+  async function call(command, params = new URLSearchParams()) {
+    withToken(params);
+    const qs = params.toString();
+    const res = await fetch(base + command + (qs ? "?" + qs : ""));
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.status);
+    return data;
+  }
+
+  function msg(text, ok = true) { const m = $("msg"); m.textContent = text; m.className = ok ? "ok" : "err"; }
+
+  function render(st) {
+    $("st-core").textContent = st.core || "not set";
+    $("st-signup").innerHTML = st.signup_as_login
+      ? `<span class="pill on">${st.signup_as_login}</span>` : `<span class="pill off">off</span>`;
+    $("st-conns").textContent = st.signaling_connections;
+    const armed = (st.armed || []).map((a) => (typeof a === "string" ? a : a.rule || JSON.stringify(a)));
+    $("st-armed").innerHTML = armed.length ? armed.map((a) => `<span class="pill on">${a}</span>`).join(" ") : `<span class="pill off">none</span>`;
+    if (st.core && !$("core").value) $("core").value = st.core;
+
+    const host = $("rules"); host.innerHTML = "";
+    for (const r of st.rules || []) {
+      const on = armed.includes(r);
+      const div = document.createElement("div"); div.className = "rule";
+      div.innerHTML = `<span class="name">${r} <span class="pill ${on ? "on" : "off"}">${on ? "armed" : "off"}</span></span>`;
+      const btn = document.createElement("button"); btn.className = "toggle" + (on ? " ghost" : "");
+      btn.textContent = on ? "Lift" : "Arm";
+      btn.onclick = () => (on ? lift(r) : arm(r));
+      div.appendChild(btn); host.appendChild(div);
+    }
+  }
+
+  async function refresh() { try { render(await call("status")); } catch (e) { msg(e.message, false); } }
+
+  async function setCore() {
+    const url = $("core").value.trim(); if (!url) return;
+    try { render(await call("core", new URLSearchParams({ url }))); msg("Core set to " + url); } catch (e) { msg(e.message, false); }
+  }
+  async function setSignup() {
+    const p = new URLSearchParams({ login: $("login").value.trim(), password: $("password").value });
+    try { render(await call("signup", p)); msg("signup account set"); } catch (e) { msg(e.message, false); }
+  }
+  async function clearSignup() {
+    try { render(await call("signup", new URLSearchParams({ off: "1" }))); $("login").value = ""; $("password").value = ""; msg("signup account cleared"); }
+    catch (e) { msg(e.message, false); }
+  }
+  async function arm(rule) { try { render(await call("arm", new URLSearchParams({ rule }))); msg("armed " + rule); } catch (e) { msg(e.message, false); } }
+  async function lift(rule) { try { render(await call("lift", new URLSearchParams({ rule }))); msg("lifted " + rule); } catch (e) { msg(e.message, false); } }
+
+  // If the first status call is refused for a token, reveal the token field.
+  (async () => {
+    try { render(await call("status")); }
+    catch (e) { if (/token/i.test(e.message)) { $("tokenCard").style.display = "block"; msg("enter the control token", false); } else { msg(e.message, false); } }
+  })();
+  setInterval(() => { if ($("tokenCard").style.display !== "block" || token()) refresh(); }, 4000);
+</script>
+</body>
+</html>

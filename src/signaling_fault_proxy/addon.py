@@ -13,6 +13,7 @@ import json
 import logging
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from mitmproxy import ctx, http
 
@@ -21,6 +22,7 @@ from signaling_fault_proxy.rules import RULES, Action, Frame, Rules
 CONTROL_PREFIX = "/__proxy/"
 SIGNALING_PATH = "/signaling/v1"
 SIGNUP_SUFFIX = "/api/v1/user"
+DASHBOARD_FILE = Path(__file__).with_name("dashboard.html")
 # Fields the app's signup body (SessionUserCredential) already carries that a login
 # (SessionLoginCredential) also needs - kept so the device identity stays the same.
 LOGIN_KEEP_FIELDS = ("identifier", "type", "bundle_id")
@@ -34,6 +36,8 @@ class SignalingFaultProxy:
         self.live: list[http.HTTPFlow] = []
         self._journal = None
         self._signup_login: tuple[str, str] | None = None
+        self._upstream: str | None = None  # the Core to forward to, set at start or from the dashboard
+        self._control_token = ""  # if set, control calls must carry ?token= (guards a public instance)
 
     def load(self, loader) -> None:
         loader.add_option("journal", str, "", "file to append every signaling frame to (JSON lines)")
@@ -46,6 +50,8 @@ class SignalingFaultProxy:
             "test stub: turn POST /api/v1/user (custom signup) into a normal login with these "
             "credentials, as 'login:password'. The stand has no custom-signup backend.",
         )
+        loader.add_option("upstream", str, "", "initial Core to forward to; the dashboard can change it")
+        loader.add_option("control_token", str, "", "if set, /__proxy/ calls must carry ?token=<it>")
 
     def configure(self, updated) -> None:
         if "journal" in updated and ctx.options.journal:
@@ -64,29 +70,36 @@ class SignalingFaultProxy:
                     params = dict(p.split("=", 1) for p in query.split("&") if "=" in p)
                     self.rules.arm(name, params)
                     self._note(f"armed {spec.strip()}")
-        if "signup_as_login" in updated:
-            spec = ctx.options.signup_as_login
-            if spec:
-                login, sep, password = spec.partition(":")
-                if not sep or not login:
-                    raise ValueError("signup_as_login must be 'login:password'")
-                self._signup_login = (login, password)
-                self._note(f"signup-as-login on: custom signup logs in as {login}")
-            else:
-                self._signup_login = None
+        if "signup_as_login" in updated and ctx.options.signup_as_login:
+            self._set_signup(ctx.options.signup_as_login)
+        if "upstream" in updated and ctx.options.upstream:
+            self._set_core(ctx.options.upstream)
+        if "control_token" in updated:
+            self._control_token = ctx.options.control_token
 
     # -- control ------------------------------------------------------------------------------
 
     def request(self, flow: http.HTTPFlow) -> None:
         path = flow.request.path
         if not path.startswith(CONTROL_PREFIX):
+            if self._upstream is None:
+                flow.response = _json(503, {"error": "no Core set - open /__proxy/ and set one"})
+                return
+            self._route(flow.request)
             if self._signup_login is not None:
                 self._signup_as_login(flow.request)
             return
+
         command = flow.request.path_components[1] if len(flow.request.path_components) > 1 else ""
+        if command in ("", "dashboard"):  # the dashboard page is public (it only talks to the API)
+            flow.response = self._dashboard()
+            return
         query = dict(flow.request.query)
-        rule = query.pop("rule", None)
+        token = query.pop("token", None)
         try:
+            if self._control_token and token != self._control_token:
+                raise ValueError("bad or missing ?token=")
+            rule = query.pop("rule", None)
             if command == "arm":
                 if not rule:
                     raise ValueError("arm needs ?rule=<name>")
@@ -95,14 +108,17 @@ class SignalingFaultProxy:
             elif command == "lift":
                 self.rules.lift(rule)
                 self._note(f"lifted {rule or 'all rules'}")
+            elif command == "core":
+                self._set_core(query["url"]) if query.get("url") else None
+            elif command == "signup":
+                self._set_signup(
+                    "" if query.get("off") else f"{query.get('login', '')}:{query.get('password', '')}"
+                )
             elif command != "status":
                 raise ValueError(f"unknown command {command!r}")
-            body, status = self._status(), 200
-        except ValueError as e:
-            body, status = {"error": str(e), "rules": sorted(RULES)}, 400
-        flow.response = http.Response.make(
-            status, json.dumps(body, indent=2) + "\n", {"content-type": "application/json"}
-        )
+            flow.response = _json(200, self._status())
+        except (ValueError, KeyError) as e:
+            flow.response = _json(400, {"error": str(e), "rules": sorted(RULES)})
 
     def _signup_as_login(self, req: http.Request) -> None:
         """Rewrite `POST .../api/v1/user` (custom signup) into `POST .../api/v1/session` (login).
@@ -134,9 +150,44 @@ class SignalingFaultProxy:
         req.path = base.rstrip("/")[: -len("user")] + "session" + sep + query
         self._note(f"signup-as-login: POST {base} -> {req.path.split('?')[0]} as {login}")
 
+    # -- runtime configuration (from the dashboard or the command line) -------------------------
+
+    def _set_core(self, url: str) -> None:
+        u = urlsplit(url.strip())
+        if u.scheme not in ("http", "https") or not u.hostname:
+            raise ValueError("Core must be an http(s) URL")
+        self._upstream = f"{u.scheme}://{u.netloc}"
+        self._note(f"Core set to {self._upstream}")
+
+    def _set_signup(self, spec: str) -> None:
+        if not spec or spec == ":":
+            self._signup_login = None
+            self._note("signup-as-login off")
+            return
+        login, sep, password = spec.partition(":")
+        if not sep or not login:
+            raise ValueError("signup credentials must be 'login:password'")
+        self._signup_login = (login, password)
+        self._note(f"signup-as-login on: custom signup logs in as {login}")
+
+    def _route(self, req: http.Request) -> None:
+        """Send the request to the currently configured Core, whatever the proxy was launched with."""
+        u = urlsplit(self._upstream)
+        req.scheme = u.scheme
+        req.host = u.hostname
+        req.port = u.port or (443 if u.scheme == "https" else 80)
+
+    def _dashboard(self) -> http.Response:
+        try:
+            html = DASHBOARD_FILE.read_bytes()
+        except OSError:
+            return _json(500, {"error": "dashboard.html is missing"})
+        return http.Response.make(200, html, {"content-type": "text/html; charset=utf-8"})
+
     def _status(self) -> dict:
         return {
-            "upstream": ctx.options.mode,
+            "core": self._upstream,
+            "signup_as_login": self._signup_login[0] if self._signup_login else None,  # login only
             "armed": self.rules.describe(),
             "signaling_connections": len([f for f in self.live if f.websocket is not None]),
             "rules": sorted(RULES),
@@ -207,6 +258,10 @@ class SignalingFaultProxy:
         log.warning("%s", text)
         if self._journal:
             self._journal.write(json.dumps({"t": round(time.time(), 3), "note": text}) + "\n")
+
+
+def _json(status: int, body: dict) -> http.Response:
+    return http.Response.make(status, json.dumps(body, indent=2) + "\n", {"content-type": "application/json"})
 
 
 def _load_rules(path: Path) -> None:

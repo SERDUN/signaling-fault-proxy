@@ -1,0 +1,17 @@
+# Fly.io deployment. `fly launch` fills in `app` and `primary_region` the first time; `fly deploy`
+# afterwards. The proxy holds no secret - set the Core and the signup account from the dashboard at
+# https://<app>.fly.dev/__proxy/ . Guard it with: fly secrets set SFP_CONTROL_TOKEN=<something>
+app = "signaling-fault-proxy"
+primary_region = "fra"
+
+[build]
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[env]
+  PORT = "8080"

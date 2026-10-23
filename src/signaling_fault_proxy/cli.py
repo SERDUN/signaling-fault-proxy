@@ -8,8 +8,10 @@ secret is typed into a shell or a script:
 
     SFP_UPSTREAM           the Core to forward to          (same as --upstream)
     SFP_SIGNUP_AS_LOGIN    LOGIN:PASSWORD for the stub      (same as --signup-as-login)
+    SFP_CONTROL_TOKEN      a token /__proxy/ calls must carry (same as --control-token)
 
-A command-line flag, when given, wins over the matching variable.
+A command-line flag, when given, wins over the matching variable. The Core and the credentials are
+optional: a dashboard at /__proxy/ can set them at runtime, which is how a deployed instance is driven.
 """
 
 from __future__ import annotations
@@ -32,7 +34,17 @@ def main(argv: list[str] | None = None) -> int:
         help="the Core to forward to, e.g. https://core.example.com (or env SFP_UPSTREAM)",
     )
     parser.add_argument("--host", default="127.0.0.1", help="address to listen on (default 127.0.0.1)")
-    parser.add_argument("--port", type=int, default=8080, help="port to listen on (default 8080)")
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=int(os.environ.get("PORT", "8080")),
+        help="port to listen on (default 8080 / $PORT)",
+    )
+    parser.add_argument(
+        "--control-token",
+        default=os.environ.get("SFP_CONTROL_TOKEN", ""),
+        help="if set, /__proxy/ control calls must carry ?token=<it> (guards a deployed instance)",
+    )
     parser.add_argument(
         "--arm", default="", help="rules to arm at start: name[?param=value&...], comma-separated"
     )
@@ -48,18 +60,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("extra", nargs=argparse.REMAINDER, help="arguments for mitmdump after --")
     args = parser.parse_args(argv)
 
-    if not args.upstream:
-        parser.error("no Core given: pass --upstream or set SFP_UPSTREAM")
-    upstream = urlparse(args.upstream)
-    if upstream.scheme not in ("http", "https") or not upstream.hostname:
-        parser.error("--upstream must be an http(s) URL of the Core")
+    upstream = args.upstream or ""
+    if upstream:
+        parsed = urlparse(upstream)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            parser.error("--upstream must be an http(s) URL of the Core")
 
+    # The addon reroutes every request to the configured Core, so the reverse target here is only a
+    # placeholder when none is given yet - the dashboard can set the Core at runtime.
+    reverse_target = upstream.rstrip("/") if upstream else "http://unset.invalid"
     mitmdump = shutil.which("mitmdump") or str(Path(sys.executable).with_name("mitmdump"))
     extra = args.extra[1:] if args.extra[:1] == ["--"] else args.extra
     command = [
         mitmdump,
         "--mode",
-        f"reverse:{args.upstream.rstrip('/')}",
+        f"reverse:{reverse_target}",
         "--listen-host",
         args.host,
         "--listen-port",
@@ -77,10 +92,17 @@ def main(argv: list[str] | None = None) -> int:
         "--set",
         f"signup_as_login={args.signup_as_login}",
         "--set",
+        f"upstream={upstream}",
+        "--set",
+        f"control_token={args.control_token}",
+        "--set",
         f"rules={','.join(str(Path(p).resolve()) for p in args.rules.split(',') if p)}",
         *extra,
     ]
-    print(f"forwarding http://{args.host}:{args.port} -> {args.upstream}", file=sys.stderr)
+    print(
+        f"listening on http://{args.host}:{args.port} -> {upstream or '(set the Core at /__proxy/)'}",
+        file=sys.stderr,
+    )
     os.execv(command[0], command)
     return 0  # not reached
 

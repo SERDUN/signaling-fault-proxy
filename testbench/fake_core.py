@@ -47,7 +47,7 @@ class Handler(BaseHTTPRequestHandler):
         """The login baked into the token this fake Core hands out (`fake-token-for-<login>`)."""
         auth = self.headers.get("authorization", "")
         prefix = "Bearer fake-token-for-"
-        return auth[len(prefix):] if auth.startswith(prefix) else None
+        return auth[len(prefix) :] if auth.startswith(prefix) else None
 
     def do_GET(self) -> None:
         path = self.path.split("?", 1)[0].rstrip("/")
@@ -56,10 +56,13 @@ class Handler(BaseHTTPRequestHandler):
         if path.endswith("/api/v1/system-info"):
             # Minimal valid SystemInfo: the app validates the backend here right after login.
             self.log("GET /system-info -> 200")
-            self._send(200, {
-                "core": {"version": "1.0.0", "ice_servers_configured": True},
-                "postgres": {"version": "16.0"},
-            })
+            self._send(
+                200,
+                {
+                    "core": {"version": "1.0.0", "ice_servers_configured": True},
+                    "postgres": {"version": "16.0"},
+                },
+            )
         elif path.endswith("/health-check"):
             self._send(200, {"status": "ok"})
         elif path.endswith("/api/v1/user"):
@@ -69,14 +72,17 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(401, {"code": "authorization_header_missing"})
                 return
             self.log(f"session entered: GET /user as {login!r} -> 200")
-            self._send(200, {
-                "email": f"{login}@bench.local",
-                "first_name": login.capitalize(),
-                "last_name": "Bench",
-                "company_name": "WebTrit Bench",
-                "numbers": {"main": "101", "ext": "101", "additional": []},
-                "balance": {"amount": 0.0, "currency": "USD", "balance_type": "unknown"},
-            })
+            self._send(
+                200,
+                {
+                    "email": f"{login}@bench.local",
+                    "first_name": login.capitalize(),
+                    "last_name": "Bench",
+                    "company_name": "WebTrit Bench",
+                    "numbers": {"main": "101", "ext": "101", "additional": []},
+                    "balance": {"amount": 0.0, "currency": "USD", "balance_type": "unknown"},
+                },
+            )
         else:
             self._send(404, {"code": "not_found", "path": self.path})
 
@@ -96,12 +102,15 @@ class Handler(BaseHTTPRequestHandler):
 
         if path.endswith("/api/v1/session"):
             # A normal login: hand back a token for whoever logged in.
-            self.log("login as %r (tenant %r)" % (body.get("login"), tenant_id or None))
-            self._send(200, {
-                "token": "fake-token-for-" + str(body.get("login", "unknown")),
-                "user_id": "user-" + str(body.get("login", "unknown")),
-                "tenant_id": tenant_id or body.get("tenant_id") or "",
-            })
+            self.log(f"login as {body.get('login')!r} (tenant {tenant_id or None!r})")
+            self._send(
+                200,
+                {
+                    "token": "fake-token-for-" + str(body.get("login", "unknown")),
+                    "user_id": "user-" + str(body.get("login", "unknown")),
+                    "tenant_id": tenant_id or body.get("tenant_id") or "",
+                },
+            )
         elif path.endswith("/api/v1/user"):
             # Custom signup is not served on this stand.
             self.log("signup refused (no custom-signup backend on this stand)")

@@ -67,16 +67,24 @@ examples and writing a rule: [docs/rules.md](docs/rules.md).
 
 ## Control API
 
-Served on the proxy's own port and never forwarded to Core:
+Served on the proxy's own port and never forwarded to Core. `GET /__proxy/` is a small **dashboard**
+that drives all of this from a browser.
 
 | Request | Answer |
 |---|---|
-| `GET /__proxy/status` | upstream, armed rules, live signaling connections, known rules |
+| `GET /__proxy/` | the dashboard page |
+| `GET /__proxy/status` | Core, signup account (login only), armed rules, live signaling connections, known rules |
+| `GET /__proxy/core?url=<url>` | sets the Core to forward to (runtime) |
+| `GET /__proxy/signup?login=<l>&password=<p>` | sets the signup-as-login account; `?off=1` clears it |
 | `GET /__proxy/arm?rule=<name>[&<param>=<value>...]` | arms a rule with its parameters; `400` for an unknown rule or parameter |
-| `GET /__proxy/lift` | lifts every rule |
-| `GET /__proxy/lift?rule=<name>` | lifts one rule |
+| `GET /__proxy/lift[?rule=<name>]` | lifts one rule, or all of them |
 
-Rules can also be armed at start: `--arm 'close-trickle-after-update,drop-on?name=hold'`.
+The Core and the signup account are **runtime state, held in memory only** - set them from the dashboard
+or these endpoints, nothing is written to disk. Start values can still come from `--upstream` /
+`--signup-as-login` / the environment, and rules from `--arm 'close-trickle-after-update,drop-on?name=hold'`.
+
+Set `--control-token <t>` (or `SFP_CONTROL_TOKEN`) and every control call must carry `?token=<t>`; the
+dashboard asks for it. Use it when the proxy is reachable by anyone (see [Deploy](#deploy)).
 
 ## Logs
 
@@ -136,6 +144,27 @@ signaling-fault-proxy --upstream URL [--host 127.0.0.1] [--port 8080] [--arm RUL
 | `--rules` | | Python files with rules of your own, comma-separated |
 | `--journal` | | file to append every signaling frame to (JSON lines) |
 | `-- ...` | | passed to `mitmdump` as is |
+
+## Deploy
+
+Run it always-on so a test does not have to start it by hand. The image holds **no Core and no
+credentials** - open the dashboard at `/__proxy/` and set them at runtime; they live in memory only.
+
+```sh
+# Docker, locally
+docker build -t signaling-fault-proxy .
+docker run -p 8080:8080 -e SFP_CONTROL_TOKEN=pick-one signaling-fault-proxy
+# then open http://localhost:8080/__proxy/
+
+# Fly.io (uses the Dockerfile and fly.toml here)
+fly launch --copy-config --now
+fly secrets set SFP_CONTROL_TOKEN=pick-one
+# the app's Core becomes https://<app>.fly.dev ; drive it at https://<app>.fly.dev/__proxy/
+```
+
+Point the mobile app's Core at the deployed URL (and reach the `/signaling/v1` WebSocket through it).
+A reachable instance logs into whatever account you give it, so **always set `SFP_CONTROL_TOKEN`** and
+use test accounts only. See [docs/signup-as-login.md](docs/signup-as-login.md) for the signup stub.
 
 ## Develop
 
