@@ -30,6 +30,11 @@
   button.ghost { background:transparent; color:var(--fg); border:1px solid var(--line); font-weight:400; }
   button:disabled { opacity:.5; cursor:not-allowed; }
   .mt { margin-top:12px; }
+  .tabs { display:flex; gap:4px; margin-bottom:14px; }
+  .tab { flex:1; padding:9px; text-align:center; background:var(--panel); border:1px solid var(--line);
+         border-radius:8px; color:var(--muted); cursor:pointer; font:inherit; }
+  .tab.active { color:var(--accent); border-color:var(--accent); font-weight:600; }
+  .hidden { display:none !important; }
   .pill { display:inline-block; padding:1px 9px; border-radius:999px; font-size:11px; font-weight:600; }
   .pill.on { background:rgba(63,185,80,.16); color:var(--ok); }
   .pill.off { background:rgba(148,163,184,.16); color:var(--muted); }
@@ -48,7 +53,7 @@
 <body>
 <div class="wrap">
   <h1>signaling-fault-proxy</h1>
-  <p class="sub">Point the app's Core at this proxy. Set the real Core and the signup account below; arm a fault to break the signaling.</p>
+  <p class="sub">Point the app's Core at this proxy. <b>Login</b>: the Core and the custom-signup response. <b>Calls</b>: arm a fault to break the signaling.</p>
 
   <!-- Login gate: the only thing shown while the instance is locked -->
   <div class="card" id="gate" style="display:none">
@@ -62,15 +67,16 @@
   <!-- The dashboard, revealed after unlock (or at once when no token is needed) -->
   <div id="app" style="display:none">
 
-  <div class="card">
-    <h2>Status</h2>
-    <div class="kv"><span class="k">Core</span><span id="st-core">-</span></div>
-    <div class="kv"><span class="k">live signaling</span><span id="st-conns">-</span></div>
-    <div class="kv"><span class="k">armed faults</span><span id="st-armed">-</span></div>
+  <div class="tabs">
+    <button class="tab active" data-tab="login" onclick="selectTab('login')">Login</button>
+    <button class="tab" data-tab="calls" onclick="selectTab('calls')">Calls</button>
   </div>
+
+  <div id="tab-login">
 
   <div class="card">
     <h2>Core</h2>
+    <div class="kv"><span class="k">current</span><span id="st-core">-</span></div>
     <label for="core">Upstream Core URL</label>
     <div class="row">
       <input id="core" placeholder="https://core.example.com">
@@ -101,10 +107,16 @@
     </div>
   </div>
 
+  </div><!-- #tab-login -->
+
+  <div id="tab-calls" class="hidden">
   <div class="card">
     <h2>Faults (tests)</h2>
-    <div id="rules"></div>
+    <div class="kv"><span class="k">live signaling</span><span id="st-conns">-</span></div>
+    <div class="kv"><span class="k">armed</span><span id="st-armed">-</span></div>
+    <div id="rules" style="margin-top:12px"></div>
   </div>
+  </div><!-- #tab-calls -->
 
   <div id="msg"></div>
 
@@ -114,6 +126,12 @@
 <script>
   const $ = (id) => document.getElementById(id);
   const base = location.pathname.replace(/\/[^/]*$/, "/");  // the /__proxy/ this page is served under
+
+  function selectTab(name) {
+    document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
+    $("tab-login").classList.toggle("hidden", name !== "login");
+    $("tab-calls").classList.toggle("hidden", name !== "calls");
+  }
 
   function token() { return $("token").value.trim(); }
   function withToken(params) { const t = token(); if (t) params.set("token", t); return params; }
