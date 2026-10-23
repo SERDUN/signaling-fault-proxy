@@ -72,8 +72,8 @@
   </div>
 
   <div class="card">
-    <h2>Custom-signup credentials</h2>
-    <p class="sub" style="margin:0 0 4px">Held only in this running proxy, never stored. A login/password in the signup body still wins per request.</p>
+    <h2>Custom-signup credentials (optional)</h2>
+    <p class="sub" style="margin:0 0 4px">Leave empty and the proxy holds no account - it logs in only as the login/password each signup request carries. A value here is a fallback, kept in memory only, never stored.</p>
     <label for="login">Login</label>
     <input id="login" placeholder="account">
     <label for="password">Password</label>

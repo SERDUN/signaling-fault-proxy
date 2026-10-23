@@ -34,9 +34,11 @@ the signup had returned it. The device identity (`identifier`, `type`, `bundle_i
 already sent, so device-limit handling stays consistent; a `/tenant/<id>/...` prefix is kept, so the
 tenant stays the same.
 
-If the signup body itself carries a non-empty `login` (and `password`), those win and the proxy logs
-in as that account; an empty or absent `login` falls back to the configured one. So a signup page can
-offer optional login/password fields: left blank they use the proxy's account, filled they pick one.
+The credentials come from the signup body: a non-empty `login` (and `password`) in it is who the proxy
+logs in as. A default set on the proxy (`--signup-as-login` / the dashboard) is only a fallback for a
+body that carries none, and is entirely optional - with no default and no body login the signup is left
+untouched. So a **deployed, shared proxy need hold no account at all**: the signup page collects the
+login and password, and nobody who does not supply them logs anybody in.
 
 The rewrite is scoped to `POST` on a path ending `/api/v1/user`. Everything else - including the
 `GET /api/v1/system-info` the app fetches right after login, and all the authenticated calls after

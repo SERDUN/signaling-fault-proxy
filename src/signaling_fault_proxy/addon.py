@@ -86,8 +86,7 @@ class SignalingFaultProxy:
                 flow.response = _json(503, {"error": "no Core set - open /__proxy/ and set one"})
                 return
             self._route(flow.request)
-            if self._signup_login is not None:
-                self._signup_as_login(flow.request)
+            self._signup_as_login(flow.request)  # no-ops unless it is a signup carrying credentials
             return
 
         command = flow.request.path_components[1] if len(flow.request.path_components) > 1 else ""
@@ -124,25 +123,26 @@ class SignalingFaultProxy:
         """Rewrite `POST .../api/v1/user` (custom signup) into `POST .../api/v1/session` (login).
 
         The stand has no custom-signup backend, so instead of the signup the app's request is turned
-        into a normal login with the configured test credentials. Both endpoints answer with the same
+        into a normal login. The credentials come from the signup body (a login/password the page
+        collected); if the body carries none, a default set on the proxy is used, and if there is no
+        default either the signup is left untouched - so a proxy that holds no account logs nobody in
+        unless the request itself carries who to log in as. Both endpoints answer with the same
         SessionToken body, which the app parses as a signup result, so the login goes through as if
         the signup returned it. The tenant prefix, if any, is kept - only the last segment changes."""
         base, sep, query = req.path.partition("?")
         if req.method != "POST" or not base.rstrip("/").endswith(SIGNUP_SUFFIX):
             return
-        assert self._signup_login is not None
         try:
             body = json.loads(req.get_text() or "{}")
         except ValueError:
             body = {}
-        # Credentials from the signup body win, so a page can log in as a specific account; an empty
-        # (or absent) login falls back to the account the proxy was configured with.
-        default_login, default_password = self._signup_login
         body_login = (body.get("login") or "").strip()
         if body_login:
             login, password = body_login, body.get("password", "")
+        elif self._signup_login is not None:
+            login, password = self._signup_login
         else:
-            login, password = default_login, default_password
+            return  # no credentials anywhere - leave the signup as a plain signup
         rewritten = {k: body[k] for k in LOGIN_KEEP_FIELDS if k in body}
         rewritten["login"] = login
         rewritten["password"] = password

@@ -55,6 +55,23 @@ def test_empty_login_falls_back_to_the_default():
     assert (body["login"], body["password"]) == ("testuser", "secret")
 
 
+def test_body_credentials_work_with_no_default():
+    req = rewrite(
+        "http://127.0.0.1:8080/api/v1/user",
+        {"identifier": "dev-uuid", "type": "mobile", "login": "bob", "password": "pw"},
+        creds=None,
+    )
+    assert req.path == "/api/v1/session"
+    assert json.loads(req.get_text()) == {"identifier": "dev-uuid", "type": "mobile", "login": "bob", "password": "pw"}
+
+
+def test_no_default_and_no_body_login_is_left_untouched():
+    body = {"identifier": "dev-uuid", "type": "mobile", "email": "a@b.c"}
+    req = rewrite("http://127.0.0.1:8080/api/v1/user", dict(body), creds=None)
+    assert req.path == "/api/v1/user"  # not rewritten
+    assert json.loads(req.get_text()) == body  # unchanged
+
+
 def test_tenant_prefix_is_kept():
     req = rewrite(
         "http://127.0.0.1:8080/tenant/t-1/api/v1/user",

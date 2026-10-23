@@ -137,10 +137,10 @@
       fields: [{ name: "email", label: "Email", type: "email", required: true },
                { name: "full_name", label: "Full name", type: "text" },
                { name: "clinic", label: "Clinic", type: "select", options: ["Clinic A", "Clinic B", "Clinic C"] },
-               { name: "login", label: "Login", type: "text", optional: true },
-               { name: "password", label: "Password", type: "password", optional: true }],
-      note: "Login and password are optional. Empty - the proxy signs in as the account it is " +
-            "configured with (<code>--signup-as-login</code>). Filled - it signs in as that account instead.",
+               { name: "login", label: "Login", type: "text", required: true },
+               { name: "password", label: "Password", type: "password", required: true }],
+      note: "The proxy holds no account - it signs in as the login and password you enter here. They " +
+            "go to <code>POST /api/v1/user</code>, which the proxy turns into a login as this account.",
     },
   };
 
