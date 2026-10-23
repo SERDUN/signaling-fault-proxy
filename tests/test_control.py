@@ -44,6 +44,29 @@ def test_route_sends_to_the_configured_core():
     assert (req.scheme, req.host, req.port) == ("https", "core.example.com", 443)
 
 
+def test_set_mock_valid_and_status():
+    p = SignalingFaultProxy()
+    p._set_mock((200, '{"otp_id": "x"}'))
+    assert p._signup_mock == (200, '{"otp_id": "x"}')
+    assert p._status()["signup_mock"] == {"status": 200, "body": '{"otp_id": "x"}'}
+    p._set_mock(None)
+    assert p._signup_mock is None
+
+
+def test_set_mock_rejects_non_json():
+    p = SignalingFaultProxy()
+    with pytest.raises(ValueError):
+        p._set_mock((200, "not json"))
+
+
+def test_is_signup_post():
+    p = SignalingFaultProxy()
+    assert p._is_signup_post(Request.make("POST", "http://h/api/v1/user"))
+    assert p._is_signup_post(Request.make("POST", "http://h/tenant/t/api/v1/user?x=1"))
+    assert not p._is_signup_post(Request.make("GET", "http://h/api/v1/user"))
+    assert not p._is_signup_post(Request.make("POST", "http://h/api/v1/session"))
+
+
 def test_route_http_core_uses_port_80():
     p = SignalingFaultProxy()
     p._set_core("http://core.local:4000")

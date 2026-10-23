@@ -39,6 +39,7 @@ class SignalingFaultProxy:
         self._upstream: str | None = None  # the Core to forward to, set at start or from the dashboard
         self._control_token = ""  # if set, control calls must carry ?token= (guards a public instance)
         self._rewrite_signup = True  # off -> custom signup goes to Core untouched (real signup backend)
+        self._signup_mock: tuple[int, str] | None = None  # (status, body): answer signup with this, no Core
 
     def load(self, loader) -> None:
         loader.add_option("journal", str, "", "file to append every signaling frame to (JSON lines)")
@@ -83,6 +84,10 @@ class SignalingFaultProxy:
     def request(self, flow: http.HTTPFlow) -> None:
         path = flow.request.path
         if not path.startswith(CONTROL_PREFIX):
+            if self._signup_mock is not None and self._is_signup_post(flow.request):
+                status, body = self._signup_mock  # answer the signup with a canned response, no Core
+                flow.response = http.Response.make(status, body, {"content-type": "application/json"})
+                return
             if self._upstream is None:
                 flow.response = _json(503, {"error": "no Core set - open /__proxy/ and set one"})
                 return
@@ -117,11 +122,29 @@ class SignalingFaultProxy:
             elif command == "rewrite":
                 self._rewrite_signup = not query.get("off")
                 self._note(f"signup rewrite {'on' if self._rewrite_signup else 'off (Core handles signup)'}")
+            elif command == "mock":
+                self._set_mock(None if query.get("off") else (int(query.get("status", 200)), query.get("body", "")))
             elif command != "status":
                 raise ValueError(f"unknown command {command!r}")
             flow.response = _json(200, self._status())
         except (ValueError, KeyError) as e:
             flow.response = _json(400, {"error": str(e), "rules": sorted(RULES)})
+
+    def _is_signup_post(self, req: http.Request) -> bool:
+        return req.method == "POST" and req.path.split("?", 1)[0].rstrip("/").endswith(SIGNUP_SUFFIX)
+
+    def _set_mock(self, mock: tuple[int, str] | None) -> None:
+        if mock is None:
+            self._signup_mock = None
+            self._note("signup mock off")
+            return
+        status, body = mock
+        try:
+            json.loads(body or "{}")
+        except ValueError:
+            raise ValueError("mock body must be JSON")
+        self._signup_mock = (status, body or "{}")
+        self._note(f"signup mock on: {status} {self._signup_mock[1][:80]}")
 
     def _signup_as_login(self, req: http.Request) -> None:
         """Rewrite `POST .../api/v1/user` (custom signup) into `POST .../api/v1/session` (login).
@@ -133,11 +156,9 @@ class SignalingFaultProxy:
         unless the request itself carries who to log in as. Both endpoints answer with the same
         SessionToken body, which the app parses as a signup result, so the login goes through as if
         the signup returned it. The tenant prefix, if any, is kept - only the last segment changes."""
-        if not self._rewrite_signup:
-            return  # let the Core handle the custom signup itself
+        if not self._rewrite_signup or not self._is_signup_post(req):
+            return  # off, or not a signup -> let the Core handle it
         base, sep, query = req.path.partition("?")
-        if req.method != "POST" or not base.rstrip("/").endswith(SIGNUP_SUFFIX):
-            return
         try:
             body = json.loads(req.get_text() or "{}")
         except ValueError:
@@ -194,6 +215,7 @@ class SignalingFaultProxy:
         return {
             "core": self._upstream,
             "rewrite_signup": self._rewrite_signup,
+            "signup_mock": {"status": self._signup_mock[0], "body": self._signup_mock[1]} if self._signup_mock else None,
             "signup_as_login": self._signup_login[0] if self._signup_login else None,  # login only
             "armed": self.rules.describe(),
             "signaling_connections": len([f for f in self.live if f.websocket is not None]),

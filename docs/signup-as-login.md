@@ -44,6 +44,12 @@ The rewrite can be turned off from the dashboard (or `GET /__proxy/rewrite?off=1
 /api/v1/user` reaches the Core untouched, so a Core that has a real custom-signup backend handles it -
 useful for testing the genuine signup flow.
 
+The dashboard can also make the signup return a **canned response** (`GET
+/__proxy/mock?status=<n>&body=<json>`, `?off=1` to clear), which overrides everything above and never
+reaches the Core. Since the app reads `POST /api/v1/user` as a `SessionResult` - a `token` (login), an
+`otp_id` (the OTP screen), or anything else (data) - this exercises each of those branches from the
+dashboard; the page's presets fill an OTP, a token or a data body.
+
 The rewrite is scoped to `POST` on a path ending `/api/v1/user`. Everything else - including the
 `GET /api/v1/system-info` the app fetches right after login, and all the authenticated calls after
 that - passes through to the Core untouched. So the Core still has to be a working one for the session

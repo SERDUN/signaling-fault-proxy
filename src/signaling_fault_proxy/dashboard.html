@@ -19,9 +19,10 @@
   .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:14px; }
   .card h2 { font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:0 0 12px; }
   label { display:block; font-size:12px; color:var(--muted); margin:10px 0 4px; }
-  input { width:100%; background:var(--bg); color:var(--fg); border:1px solid var(--line);
+  input, textarea { width:100%; background:var(--bg); color:var(--fg); border:1px solid var(--line);
           border-radius:8px; padding:9px 10px; font:inherit; }
-  input:focus { border-color:var(--accent); outline:none; }
+  textarea { resize:vertical; }
+  input:focus, textarea:focus { border-color:var(--accent); outline:none; }
   .row { display:flex; gap:8px; }
   .row > * { flex:1; }
   button { background:var(--accent); color:#06121c; border:0; border-radius:8px; padding:9px 14px;
@@ -72,13 +73,26 @@
   </div>
 
   <div class="card">
-    <h2>Custom signup</h2>
-    <div class="kv"><span class="k">rewrite signup &rarr; login</span><span id="st-rewrite">-</span></div>
+    <h2>Custom signup response</h2>
+    <div class="kv"><span class="k">mode</span><span id="st-signup-mode">-</span></div>
     <div class="row mt">
       <button onclick="setRewrite(true)">Rewrite &rarr; login</button>
       <button class="ghost" onclick="setRewrite(false)">Pass to Core</button>
     </div>
-    <p class="sub" style="margin:8px 0 0">Off: <code>POST /api/v1/user</code> reaches the Core untouched, so the Core's own custom-signup backend handles it (for testing a real signup).</p>
+    <p class="sub" style="margin:10px 0 0">Or return a canned response (overrides the above) to exercise the app's token / otp / data branches of <code>POST /api/v1/user</code>:</p>
+    <div class="row mt">
+      <button class="ghost" onclick="fillMock('otp')">OTP</button>
+      <button class="ghost" onclick="fillMock('token')">Token</button>
+      <button class="ghost" onclick="fillMock('data')">Data</button>
+    </div>
+    <label for="mockStatus">HTTP status</label>
+    <input id="mockStatus" value="200">
+    <label for="mockBody">JSON body</label>
+    <textarea id="mockBody" rows="4" placeholder='{"otp_id": "..."}'></textarea>
+    <div class="row mt">
+      <button onclick="setMock()">Apply mock</button>
+      <button class="ghost" onclick="clearMock()">Clear mock</button>
+    </div>
   </div>
 
   <div class="card">
@@ -122,8 +136,13 @@
 
   function render(st) {
     $("st-core").textContent = st.core || "not set";
-    $("st-rewrite").innerHTML = st.rewrite_signup
-      ? `<span class="pill on">rewrite &rarr; login</span>` : `<span class="pill off">Core handles signup</span>`;
+    if (st.signup_mock) {
+      $("st-signup-mode").innerHTML = `<span class="pill on">mock ${st.signup_mock.status}</span>`;
+      if (document.activeElement !== $("mockBody")) { $("mockStatus").value = st.signup_mock.status; $("mockBody").value = st.signup_mock.body; }
+    } else {
+      $("st-signup-mode").innerHTML = st.rewrite_signup
+        ? `<span class="pill on">rewrite &rarr; login</span>` : `<span class="pill off">pass to Core</span>`;
+    }
     $("st-signup").innerHTML = st.signup_as_login
       ? `<span class="pill on">${st.signup_as_login}</span>` : `<span class="pill off">off</span>`;
     $("st-conns").textContent = st.signaling_connections;
@@ -151,8 +170,22 @@
   }
   async function setRewrite(on) {
     const p = on ? new URLSearchParams() : new URLSearchParams({ off: "1" });
-    try { render(await call("rewrite", p)); msg(on ? "signup is rewritten to a login" : "signup goes to the Core"); }
+    try { await call("mock", new URLSearchParams({ off: "1" })); render(await call("rewrite", p)); msg(on ? "signup is rewritten to a login" : "signup goes to the Core"); }
     catch (e) { msg(e.message, false); }
+  }
+
+  const MOCKS = {
+    otp: { "otp_id": "otp-demo-1", "notification_type": "email", "from_email": "demo@bench.local" },
+    token: { "token": "mock-token", "user_id": "1" },
+    data: { "example": "value" },
+  };
+  function fillMock(kind) { $("mockStatus").value = "200"; $("mockBody").value = JSON.stringify(MOCKS[kind], null, 2); }
+  async function setMock() {
+    const p = new URLSearchParams({ status: $("mockStatus").value.trim() || "200", body: $("mockBody").value.trim() || "{}" });
+    try { render(await call("mock", p)); msg("signup now returns the mock"); } catch (e) { msg(e.message, false); }
+  }
+  async function clearMock() {
+    try { render(await call("mock", new URLSearchParams({ off: "1" }))); $("mockBody").value = ""; msg("mock cleared"); } catch (e) { msg(e.message, false); }
   }
   async function setSignup() {
     const p = new URLSearchParams({ login: $("login").value.trim(), password: $("password").value });
