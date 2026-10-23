@@ -50,6 +50,10 @@ reaches the Core. Since the app reads `POST /api/v1/user` as a `SessionResult` -
 `otp_id` (the OTP screen), or anything else (data) - this exercises each of those branches from the
 dashboard; the page's presets fill an OTP, a token or a data body.
 
+An OTP mock stands in for the whole OTP flow, not just the first step: the proxy also answers
+`otp-create` (resend) and, on `otp-verify`, replays the credentials the signup carried as a real login
+against the Core - so any code the user types completes the OTP screen into a genuine session.
+
 The rewrite is scoped to `POST` on a path ending `/api/v1/user`. Everything else - including the
 `GET /api/v1/system-info` the app fetches right after login, and all the authenticated calls after
 that - passes through to the Core untouched. So the Core still has to be a working one for the session

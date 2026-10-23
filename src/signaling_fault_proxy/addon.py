@@ -22,6 +22,8 @@ from signaling_fault_proxy.rules import RULES, Action, Frame, Rules
 CONTROL_PREFIX = "/__proxy/"
 SIGNALING_PATH = "/signaling/v1"
 SIGNUP_SUFFIX = "/api/v1/user"
+OTP_VERIFY_SUFFIX = "/api/v1/session/otp-verify"
+OTP_CREATE_SUFFIX = "/api/v1/session/otp-create"
 DASHBOARD_FILE = Path(__file__).with_name("dashboard.html")
 # Fields the app's signup body (SessionUserCredential) already carries that a login
 # (SessionLoginCredential) also needs - kept so the device identity stays the same.
@@ -40,6 +42,7 @@ class SignalingFaultProxy:
         self._control_token = ""  # if set, control calls must carry ?token= (guards a public instance)
         self._rewrite_signup = True  # off -> custom signup goes to Core untouched (real signup backend)
         self._signup_mock: tuple[int, str] | None = None  # (status, body): answer signup with this, no Core
+        self._mock_pending_login: dict | None = None  # creds from an OTP-mock signup, replayed on otp-verify
 
     def load(self, loader) -> None:
         loader.add_option("journal", str, "", "file to append every signaling frame to (JSON lines)")
@@ -84,10 +87,11 @@ class SignalingFaultProxy:
     def request(self, flow: http.HTTPFlow) -> None:
         path = flow.request.path
         if not path.startswith(CONTROL_PREFIX):
-            if self._signup_mock is not None and self._is_signup_post(flow.request):
-                status, body = self._signup_mock  # answer the signup with a canned response, no Core
-                flow.response = http.Response.make(status, body, {"content-type": "application/json"})
-                return
+            if self._signup_mock is not None:
+                resp = self._mock_response(flow.request)  # may also rewrite the request for a real login
+                if resp is not None:
+                    flow.response = resp
+                    return
             if self._upstream is None:
                 flow.response = _json(503, {"error": "no Core set - open /__proxy/ and set one"})
                 return
@@ -133,7 +137,62 @@ class SignalingFaultProxy:
     def _is_signup_post(self, req: http.Request) -> bool:
         return req.method == "POST" and req.path.split("?", 1)[0].rstrip("/").endswith(SIGNUP_SUFFIX)
 
+    def _mock_is_otp(self) -> bool:
+        if self._signup_mock is None:
+            return False
+        try:
+            return "otp_id" in json.loads(self._signup_mock[1] or "{}")
+        except ValueError:
+            return False
+
+    def _mock_response(self, req: http.Request) -> http.Response | None:
+        """The answer a configured mock gives, or None to let the request go to the Core (possibly
+        after a rewrite). An OTP mock also stands in for the otp-create/otp-verify steps, so the whole
+        OTP flow completes: the credentials the signup carried are replayed as a real login on verify,
+        so the app ends up in a genuine session - whatever code the user types."""
+        status, body = self._signup_mock
+        canned = http.Response.make(status, body, {"content-type": "application/json"})
+        if self._is_signup_post(req):
+            if self._mock_is_otp():
+                self._stash_pending_login(req)
+            return canned
+        if not self._mock_is_otp():
+            return None
+        path = req.path.split("?", 1)[0].rstrip("/")
+        if req.method == "POST" and path.endswith(OTP_CREATE_SUFFIX):
+            return canned  # a resend hands back the same otp
+        if req.method == "POST" and path.endswith(OTP_VERIFY_SUFFIX):
+            if self._mock_pending_login is not None:
+                self._rewrite_otp_verify_to_login(req)
+                return None  # forward to Core as a real login
+            return _json(200, {"token": "mock-token", "user_id": "1", "tenant_id": ""})
+        return None
+
+    def _stash_pending_login(self, req: http.Request) -> None:
+        try:
+            body = json.loads(req.get_text() or "{}")
+        except ValueError:
+            body = {}
+        login = (body.get("login") or "").strip()
+        if login:
+            keep = {k: body[k] for k in LOGIN_KEEP_FIELDS if k in body}
+            keep["login"] = login
+            keep["password"] = body.get("password", "")
+            self._mock_pending_login = keep
+        else:
+            self._mock_pending_login = None
+
+    def _rewrite_otp_verify_to_login(self, req: http.Request) -> None:
+        base, sep, query = req.path.partition("?")
+        b = base.rstrip("/")
+        if b.endswith(OTP_VERIFY_SUFFIX):
+            b = b[: -len("/otp-verify")]  # .../session/otp-verify -> .../session
+        req.set_text(json.dumps(self._mock_pending_login))
+        req.path = b + sep + query
+        self._note(f"otp mock: verify -> real login as {self._mock_pending_login.get('login')}")
+
     def _set_mock(self, mock: tuple[int, str] | None) -> None:
+        self._mock_pending_login = None
         if mock is None:
             self._signup_mock = None
             self._note("signup mock off")
