@@ -75,6 +75,20 @@ Build the app with its Core set to the proxy (`WEBTRIT_APP_CORE_URL`, or pick it
 put the phone's `127.0.0.1` onto the proxy with `adb reverse tcp:8411 tcp:8411`, and the signup page's
 `POST /api/v1/user` lands on the proxy, which turns it into a login.
 
+## GitHub Pages
+
+The embedded pages in [`testbench/embedded/`](../testbench/embedded) are published by GitHub Pages
+from `main`, so the app can load one over HTTPS with no local server and no `adb reverse` for the page:
+
+- <https://serdun.github.io/signaling-fault-proxy/testbench/embedded/custom_signup_tabs.html> - the
+  multi-tab demo (methods, and a Custom signup with optional login/password);
+- <https://serdun.github.io/signaling-fault-proxy/testbench/embedded/custom_signup_patient.html> - the
+  simple WebTrit example.
+
+Point the `uri` in `app.embedded.config.json` at one of these. Only the page is hosted; the signup
+`POST /api/v1/user` still goes to the Core the app is pointed at (the proxy, for `--signup-as-login`).
+`.nojekyll` at the repo root makes Pages serve the files as they are.
+
 ## The bench
 
 [`testbench/`](../testbench) runs the whole loop with a browser standing in for the app, and - unless
