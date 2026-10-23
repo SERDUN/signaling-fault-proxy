@@ -121,12 +121,12 @@
       title: "Email login", desc: "Enter the email the code is sent to.",
       fields: [{ name: "email", label: "Email", type: "email", required: true }],
     },
-    account: {
-      name: "Account & password",
-      blurb: "Classic sign-in with an account number and password.",
+    passwordSignin: {
+      name: "Password sign-in",
+      blurb: "Sign in with an account login and password.",
       api: "POST /api/v1/session",
-      title: "Account login", desc: "Enter your account number and password.",
-      fields: [{ name: "account", label: "Account number", type: "text", required: true },
+      title: "Password sign-in", desc: "Enter your login and password.",
+      fields: [{ name: "login", label: "Login", type: "text", required: true },
                { name: "password", label: "Password", type: "password", required: true }],
     },
     custom: {
