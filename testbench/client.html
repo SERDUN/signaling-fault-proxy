@@ -33,15 +33,15 @@
 <body>
 <header>
   <h1>signup-as-login bench</h1>
-  <label>proxy <input id="proxy" value="http://127.0.0.1:8411"></label>
+  <label>proxy <input id="proxy" value="https://signaling-fault-proxy-serdun.fly.dev"></label>
   <label>device id <input id="device" value="bench-device-0001"></label>
   <span id="session" class="tag err" style="margin-left:auto">session: none</span>
 </header>
 <main>
   <section class="pane">
-    <h2>embedded custom-signup page</h2>
-    <iframe id="page" src="embedded/custom_signup_patient.html"></iframe>
-    <div class="hint">The page posts <code>{event:"signup", data}</code> to <code>WebtritLoginChannel</code>, exactly as inside the app's WebView. This bench stands in for the app: it turns that into <code>POST /api/v1/user</code> to the proxy.</div>
+    <h2>embedded custom-signup page (web)</h2>
+    <iframe id="page" src="embedded/custom_signup_tabs.html?localeName=en"></iframe>
+    <div class="hint">This is the browser path from the doc: the page has no <code>WebtritLoginChannel</code>, so it posts <code>{channel:"WebtritLoginChannel", message}</code> to its parent window. This host listens for that (as the web app does) and turns it into <code>POST /api/v1/user</code> to the proxy.</div>
   </section>
   <section class="pane">
     <h2>signup &rarr; token &rarr; session entered</h2>
@@ -77,8 +77,8 @@ async function onSignup(message) {
   const url = tenantId ? `${base}/tenant/${encodeURIComponent(tenantId)}/api/v1/user`
                        : `${base}/api/v1/user`;
 
-  // Same shape the app's api client sends for createUser: device identity + the form data.
-  const body = { identifier: $("device").value, type: "mobile", bundle_id: "com.webtrit.bench", ...data };
+  // Same shape the web app's api client sends for createUser: device identity + the form data.
+  const body = { identifier: $("device").value, type: "web", bundle_id: "com.webtrit.bench", ...data };
 
   card("send", "POST", url, body);
   let payload;
@@ -134,13 +134,14 @@ function setSession(active, who) {
   el.textContent = active ? ("session: active (" + who + ")") : "session: none";
 }
 
-// Inject the channel into the embedded page, just as the app injects it into its WebView.
-$("page").addEventListener("load", () => {
-  const win = $("page").contentWindow;
-  win.WebtritLoginChannel = { postMessage: onSignup };
-  if (typeof win.initializePage === "function") win.initializePage({ locale: "en" });
-  card("send", "ready", "channel injected into the embedded page", "fill the email and press Submit");
+// Browser (web) path: the page has no WebtritLoginChannel, so it posts to its parent window.
+// We listen for those posts, exactly as the web app does - no channel is injected.
+window.addEventListener("message", (e) => {
+  const d = e.data;
+  if (d && d.channel === "WebtritLoginChannel" && typeof d.message === "string") onSignup(d.message);
 });
+$("page").addEventListener("load", () =>
+  card("send", "ready", "web page loaded - it posts to this window", "fill the fields and press Submit"));
 </script>
 </body>
 </html>
