@@ -208,6 +208,13 @@
     $("submit").classList.add("hidden");
   });
 
+  // The app's WebView provides WebtritLoginChannel. In a browser (the configurator's Realtime
+  // preview) the page is an iframe with no such object, so it posts to the parent window instead.
+  function sendToApp(message) {
+    if (window.WebtritLoginChannel) WebtritLoginChannel.postMessage(message);
+    else window.parent.postMessage({ channel: "WebtritLoginChannel", message: message }, "*");
+  }
+
   // --- submit -> hand the data to the app; empty optional fields are left out ---
   $("submit").addEventListener("click", () => {
     const m = METHODS[current];
@@ -218,7 +225,7 @@
       if (v || !f.optional) data[f.name] = v;   // omit empty optional fields (e.g. login/password)
     }
     $("submit").classList.add("loading"); $("submit").disabled = true;
-    WebtritLoginChannel.postMessage(JSON.stringify({ event: "signup", data }));
+    sendToApp(JSON.stringify({ event: "signup", data }));
   });
 
   // The app injects safe-area insets (and theme) through this on load and on rotation.
@@ -241,6 +248,10 @@
     $("methodsTitle").textContent = t.methodsTitle;
     $("submitLabel").textContent = t.submit;
   };
+
+  // In a browser the app cannot call initializePage; it puts the locale in the address instead.
+  const localeName = new URLSearchParams(location.search).get("localeName");
+  if (localeName) window.initializePage({ locale: localeName.split(/[-_]/)[0] });
 </script>
 </body>
 </html>

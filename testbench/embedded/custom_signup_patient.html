@@ -190,7 +190,13 @@
             }
         };
 
-        WebtritLoginChannel.postMessage(JSON.stringify(json));
+        // In a browser (the configurator's Realtime preview) the page is an iframe with no
+        // WebtritLoginChannel, so it posts to the parent window instead.
+        if (window.WebtritLoginChannel) {
+            WebtritLoginChannel.postMessage(JSON.stringify(json));
+        } else {
+            window.parent.postMessage({ channel: "WebtritLoginChannel", message: JSON.stringify(json) }, "*");
+        }
     }
 
     setLocale("en");
