@@ -38,6 +38,7 @@ class SignalingFaultProxy:
         self._signup_login: tuple[str, str] | None = None
         self._upstream: str | None = None  # the Core to forward to, set at start or from the dashboard
         self._control_token = ""  # if set, control calls must carry ?token= (guards a public instance)
+        self._rewrite_signup = True  # off -> custom signup goes to Core untouched (real signup backend)
 
     def load(self, loader) -> None:
         loader.add_option("journal", str, "", "file to append every signaling frame to (JSON lines)")
@@ -113,6 +114,9 @@ class SignalingFaultProxy:
                 self._set_signup(
                     "" if query.get("off") else f"{query.get('login', '')}:{query.get('password', '')}"
                 )
+            elif command == "rewrite":
+                self._rewrite_signup = not query.get("off")
+                self._note(f"signup rewrite {'on' if self._rewrite_signup else 'off (Core handles signup)'}")
             elif command != "status":
                 raise ValueError(f"unknown command {command!r}")
             flow.response = _json(200, self._status())
@@ -129,6 +133,8 @@ class SignalingFaultProxy:
         unless the request itself carries who to log in as. Both endpoints answer with the same
         SessionToken body, which the app parses as a signup result, so the login goes through as if
         the signup returned it. The tenant prefix, if any, is kept - only the last segment changes."""
+        if not self._rewrite_signup:
+            return  # let the Core handle the custom signup itself
         base, sep, query = req.path.partition("?")
         if req.method != "POST" or not base.rstrip("/").endswith(SIGNUP_SUFFIX):
             return
@@ -187,6 +193,7 @@ class SignalingFaultProxy:
     def _status(self) -> dict:
         return {
             "core": self._upstream,
+            "rewrite_signup": self._rewrite_signup,
             "signup_as_login": self._signup_login[0] if self._signup_login else None,  # login only
             "armed": self.rules.describe(),
             "signaling_connections": len([f for f in self.live if f.websocket is not None]),

@@ -40,6 +40,10 @@ body that carries none, and is entirely optional - with no default and no body l
 untouched. So a **deployed, shared proxy need hold no account at all**: the signup page collects the
 login and password, and nobody who does not supply them logs anybody in.
 
+The rewrite can be turned off from the dashboard (or `GET /__proxy/rewrite?off=1`): then `POST
+/api/v1/user` reaches the Core untouched, so a Core that has a real custom-signup backend handles it -
+useful for testing the genuine signup flow.
+
 The rewrite is scoped to `POST` on a path ending `/api/v1/user`. Everything else - including the
 `GET /api/v1/system-info` the app fetches right after login, and all the authenticated calls after
 that - passes through to the Core untouched. So the Core still has to be a working one for the session

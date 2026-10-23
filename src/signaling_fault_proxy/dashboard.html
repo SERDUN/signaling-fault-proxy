@@ -72,6 +72,16 @@
   </div>
 
   <div class="card">
+    <h2>Custom signup</h2>
+    <div class="kv"><span class="k">rewrite signup &rarr; login</span><span id="st-rewrite">-</span></div>
+    <div class="row mt">
+      <button onclick="setRewrite(true)">Rewrite &rarr; login</button>
+      <button class="ghost" onclick="setRewrite(false)">Pass to Core</button>
+    </div>
+    <p class="sub" style="margin:8px 0 0">Off: <code>POST /api/v1/user</code> reaches the Core untouched, so the Core's own custom-signup backend handles it (for testing a real signup).</p>
+  </div>
+
+  <div class="card">
     <h2>Custom-signup credentials (optional)</h2>
     <p class="sub" style="margin:0 0 4px">Leave empty and the proxy holds no account - it logs in only as the login/password each signup request carries. A value here is a fallback, kept in memory only, never stored.</p>
     <label for="login">Login</label>
@@ -112,6 +122,8 @@
 
   function render(st) {
     $("st-core").textContent = st.core || "not set";
+    $("st-rewrite").innerHTML = st.rewrite_signup
+      ? `<span class="pill on">rewrite &rarr; login</span>` : `<span class="pill off">Core handles signup</span>`;
     $("st-signup").innerHTML = st.signup_as_login
       ? `<span class="pill on">${st.signup_as_login}</span>` : `<span class="pill off">off</span>`;
     $("st-conns").textContent = st.signaling_connections;
@@ -136,6 +148,11 @@
   async function setCore() {
     const url = $("core").value.trim(); if (!url) return;
     try { render(await call("core", new URLSearchParams({ url }))); msg("Core set to " + url); } catch (e) { msg(e.message, false); }
+  }
+  async function setRewrite(on) {
+    const p = on ? new URLSearchParams() : new URLSearchParams({ off: "1" });
+    try { render(await call("rewrite", p)); msg(on ? "signup is rewritten to a login" : "signup goes to the Core"); }
+    catch (e) { msg(e.message, false); }
   }
   async function setSignup() {
     const p = new URLSearchParams({ login: $("login").value.trim(), password: $("password").value });

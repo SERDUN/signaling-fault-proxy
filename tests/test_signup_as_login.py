@@ -72,6 +72,17 @@ def test_no_default_and_no_body_login_is_left_untouched():
     assert json.loads(req.get_text()) == body  # unchanged
 
 
+def test_rewrite_off_sends_the_signup_to_core_untouched():
+    proxy = SignalingFaultProxy()
+    proxy._signup_login = ("acc", "pw")
+    proxy._rewrite_signup = False
+    req = signup_request(
+        "http://127.0.0.1:8080/api/v1/user", {"identifier": "d", "type": "mobile", "login": "x", "password": "y"}
+    )
+    proxy._signup_as_login(req)
+    assert req.path == "/api/v1/user"  # not rewritten - the Core handles the signup
+
+
 def test_tenant_prefix_is_kept():
     req = rewrite(
         "http://127.0.0.1:8080/tenant/t-1/api/v1/user",
