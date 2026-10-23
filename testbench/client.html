@@ -77,8 +77,10 @@ async function onSignup(message) {
   const url = tenantId ? `${base}/tenant/${encodeURIComponent(tenantId)}/api/v1/user`
                        : `${base}/api/v1/user`;
 
-  // Same shape the web app's api client sends for createUser: device identity + the form data.
-  const body = { identifier: $("device").value, type: "web", bundle_id: "com.webtrit.bench", ...data };
+  // The device identity + the form data, as the app's api client sends for createUser. A real web
+  // app sends type "web" with a bundle_id registered on the Core (WEBTRIT_APP_WEB_BUNDLE_ID); here
+  // we use the identity the test Core already accepts so the demo completes.
+  const body = { identifier: $("device").value, type: "android", ...data };
 
   card("send", "POST", url, body);
   let payload;
