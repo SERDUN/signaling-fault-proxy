@@ -53,7 +53,6 @@
   <div class="card">
     <h2>Status</h2>
     <div class="kv"><span class="k">Core</span><span id="st-core">-</span></div>
-    <div class="kv"><span class="k">signup-as-login</span><span id="st-signup">-</span></div>
     <div class="kv"><span class="k">live signaling</span><span id="st-conns">-</span></div>
     <div class="kv"><span class="k">armed faults</span><span id="st-armed">-</span></div>
   </div>
@@ -96,19 +95,6 @@
   </div>
 
   <div class="card">
-    <h2>Custom-signup credentials (optional)</h2>
-    <p class="sub" style="margin:0 0 4px">Leave empty and the proxy holds no account - it logs in only as the login/password each signup request carries. A value here is a fallback, kept in memory only, never stored.</p>
-    <label for="login">Login</label>
-    <input id="login" placeholder="account">
-    <label for="password">Password</label>
-    <input id="password" type="password" placeholder="password">
-    <div class="row mt">
-      <button onclick="setSignup()">Save</button>
-      <button class="ghost" onclick="clearSignup()">Clear</button>
-    </div>
-  </div>
-
-  <div class="card">
     <h2>Faults (tests)</h2>
     <div id="rules"></div>
   </div>
@@ -143,8 +129,6 @@
       $("st-signup-mode").innerHTML = st.rewrite_signup
         ? `<span class="pill on">rewrite &rarr; login</span>` : `<span class="pill off">pass to Core</span>`;
     }
-    $("st-signup").innerHTML = st.signup_as_login
-      ? `<span class="pill on">${st.signup_as_login}</span>` : `<span class="pill off">off</span>`;
     $("st-conns").textContent = st.signaling_connections;
     const armed = (st.armed || []).map((a) => (typeof a === "string" ? a : a.rule || JSON.stringify(a)));
     $("st-armed").innerHTML = armed.length ? armed.map((a) => `<span class="pill on">${a}</span>`).join(" ") : `<span class="pill off">none</span>`;
@@ -186,14 +170,6 @@
   }
   async function clearMock() {
     try { render(await call("mock", new URLSearchParams({ off: "1" }))); $("mockBody").value = ""; msg("mock cleared"); } catch (e) { msg(e.message, false); }
-  }
-  async function setSignup() {
-    const p = new URLSearchParams({ login: $("login").value.trim(), password: $("password").value });
-    try { render(await call("signup", p)); msg("signup account set"); } catch (e) { msg(e.message, false); }
-  }
-  async function clearSignup() {
-    try { render(await call("signup", new URLSearchParams({ off: "1" }))); $("login").value = ""; $("password").value = ""; msg("signup account cleared"); }
-    catch (e) { msg(e.message, false); }
   }
   async function arm(rule) { try { render(await call("arm", new URLSearchParams({ rule }))); msg("armed " + rule); } catch (e) { msg(e.message, false); } }
   async function lift(rule) { try { render(await call("lift", new URLSearchParams({ rule }))); msg("lifted " + rule); } catch (e) { msg(e.message, false); } }
