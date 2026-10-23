@@ -50,16 +50,23 @@
   <h1>signaling-fault-proxy</h1>
   <p class="sub">Point the app's Core at this proxy. Set the real Core and the signup account below; arm a fault to break the signaling.</p>
 
+  <!-- Login gate: the only thing shown while the instance is locked -->
+  <div class="card" id="gate" style="display:none">
+    <h2>Control token</h2>
+    <p class="sub" style="margin:0 0 10px">This instance is locked. Enter its control token to use the dashboard.</p>
+    <input id="token" type="password" placeholder="control token" onkeydown="if(event.key==='Enter')unlock()">
+    <div class="row mt"><button onclick="unlock()">Unlock</button></div>
+    <div id="gateMsg" style="color:var(--err);font-size:12px;margin-top:8px"></div>
+  </div>
+
+  <!-- The dashboard, revealed after unlock (or at once when no token is needed) -->
+  <div id="app" style="display:none">
+
   <div class="card">
     <h2>Status</h2>
     <div class="kv"><span class="k">Core</span><span id="st-core">-</span></div>
     <div class="kv"><span class="k">live signaling</span><span id="st-conns">-</span></div>
     <div class="kv"><span class="k">armed faults</span><span id="st-armed">-</span></div>
-  </div>
-
-  <div class="card" id="tokenCard" style="display:none">
-    <h2>Control token</h2>
-    <input id="token" type="password" placeholder="this instance requires a token">
   </div>
 
   <div class="card">
@@ -100,6 +107,8 @@
   </div>
 
   <div id="msg"></div>
+
+  </div><!-- #app -->
 </div>
 
 <script>
@@ -174,12 +183,26 @@
   async function arm(rule) { try { render(await call("arm", new URLSearchParams({ rule }))); msg("armed " + rule); } catch (e) { msg(e.message, false); } }
   async function lift(rule) { try { render(await call("lift", new URLSearchParams({ rule }))); msg("lifted " + rule); } catch (e) { msg(e.message, false); } }
 
-  // If the first status call is refused for a token, reveal the token field.
+  let polling = false;
+  function showApp() {
+    $("gate").style.display = "none";
+    $("app").style.display = "block";
+    if (!polling) { polling = true; setInterval(refresh, 4000); }
+  }
+
+  // Unlock the whole UI once the token is accepted. Until then only the gate shows.
+  async function unlock() {
+    try { render(await call("status")); showApp(); }
+    catch (e) { $("gateMsg").textContent = /token/i.test(e.message) ? "wrong token" : e.message; }
+  }
+
   (async () => {
-    try { render(await call("status")); }
-    catch (e) { if (/token/i.test(e.message)) { $("tokenCard").style.display = "block"; msg("enter the control token", false); } else { msg(e.message, false); } }
+    try { render(await call("status")); showApp(); }  // no token needed -> straight in
+    catch (e) {
+      if (/token/i.test(e.message)) { $("gate").style.display = "block"; $("token").focus(); }
+      else { showApp(); msg(e.message, false); }
+    }
   })();
-  setInterval(() => { if ($("tokenCard").style.display !== "block" || token()) refresh(); }, 4000);
 </script>
 </body>
 </html>
