@@ -20,6 +20,10 @@ from signaling_fault_proxy.rules import RULES, Action, Frame, Rules
 
 CONTROL_PREFIX = "/__proxy/"
 SIGNALING_PATH = "/signaling/v1"
+SIGNUP_SUFFIX = "/api/v1/user"
+# Fields the app's signup body (SessionUserCredential) already carries that a login
+# (SessionLoginCredential) also needs - kept so the device identity stays the same.
+LOGIN_KEEP_FIELDS = ("identifier", "type", "bundle_id")
 
 log = logging.getLogger("signaling-fault-proxy")
 
@@ -29,11 +33,19 @@ class SignalingFaultProxy:
         self.rules = Rules()
         self.live: list[http.HTTPFlow] = []
         self._journal = None
+        self._signup_login: tuple[str, str] | None = None
 
     def load(self, loader) -> None:
         loader.add_option("journal", str, "", "file to append every signaling frame to (JSON lines)")
         loader.add_option("arm", str, "", "rules to arm at start: name[?param=value&...], comma-separated")
         loader.add_option("rules", str, "", "python files with more rules, comma-separated")
+        loader.add_option(
+            "signup_as_login",
+            str,
+            "",
+            "test stub: turn POST /api/v1/user (custom signup) into a normal login with these "
+            "credentials, as 'login:password'. The stand has no custom-signup backend.",
+        )
 
     def configure(self, updated) -> None:
         if "journal" in updated and ctx.options.journal:
@@ -52,12 +64,24 @@ class SignalingFaultProxy:
                     params = dict(p.split("=", 1) for p in query.split("&") if "=" in p)
                     self.rules.arm(name, params)
                     self._note(f"armed {spec.strip()}")
+        if "signup_as_login" in updated:
+            spec = ctx.options.signup_as_login
+            if spec:
+                login, sep, password = spec.partition(":")
+                if not sep or not login:
+                    raise ValueError("signup_as_login must be 'login:password'")
+                self._signup_login = (login, password)
+                self._note(f"signup-as-login on: custom signup logs in as {login}")
+            else:
+                self._signup_login = None
 
     # -- control ------------------------------------------------------------------------------
 
     def request(self, flow: http.HTTPFlow) -> None:
         path = flow.request.path
         if not path.startswith(CONTROL_PREFIX):
+            if self._signup_login is not None:
+                self._signup_as_login(flow.request)
             return
         command = flow.request.path_components[1] if len(flow.request.path_components) > 1 else ""
         query = dict(flow.request.query)
@@ -79,6 +103,36 @@ class SignalingFaultProxy:
         flow.response = http.Response.make(
             status, json.dumps(body, indent=2) + "\n", {"content-type": "application/json"}
         )
+
+    def _signup_as_login(self, req: http.Request) -> None:
+        """Rewrite `POST .../api/v1/user` (custom signup) into `POST .../api/v1/session` (login).
+
+        The stand has no custom-signup backend, so instead of the signup the app's request is turned
+        into a normal login with the configured test credentials. Both endpoints answer with the same
+        SessionToken body, which the app parses as a signup result, so the login goes through as if
+        the signup returned it. The tenant prefix, if any, is kept - only the last segment changes."""
+        base, sep, query = req.path.partition("?")
+        if req.method != "POST" or not base.rstrip("/").endswith(SIGNUP_SUFFIX):
+            return
+        assert self._signup_login is not None
+        try:
+            body = json.loads(req.get_text() or "{}")
+        except ValueError:
+            body = {}
+        # Credentials from the signup body win, so a page can log in as a specific account; an empty
+        # (or absent) login falls back to the account the proxy was configured with.
+        default_login, default_password = self._signup_login
+        body_login = (body.get("login") or "").strip()
+        if body_login:
+            login, password = body_login, body.get("password", "")
+        else:
+            login, password = default_login, default_password
+        rewritten = {k: body[k] for k in LOGIN_KEEP_FIELDS if k in body}
+        rewritten["login"] = login
+        rewritten["password"] = password
+        req.set_text(json.dumps(rewritten))
+        req.path = base.rstrip("/")[: -len("user")] + "session" + sep + query
+        self._note(f"signup-as-login: POST {base} -> {req.path.split('?')[0]} as {login}")
 
     def _status(self) -> dict:
         return {

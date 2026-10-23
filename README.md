@@ -98,6 +98,21 @@ The journal of a run is the proxy's side of the evidence; the app's log is the o
 The journal keeps each frame's direction, kind, name and transaction, not its body: an SDP (which codec a
 renegotiation settled on, say) is read from the app's log, not from the journal.
 
+## Signup as login
+
+On a stand with no custom-signup backend, `--signup-as-login LOGIN:PASSWORD` (or the environment
+variable `SFP_SIGNUP_AS_LOGIN`) serves the app's custom signup (`POST /api/v1/user`) as an ordinary
+login against a test account, so the embedded signup screen can be tested end to end. The Core and the
+credentials come from the environment (`SFP_UPSTREAM`, `SFP_SIGNUP_AS_LOGIN`); nothing is hardcoded.
+
+```sh
+SFP_UPSTREAM=https://core.example.com SFP_SIGNUP_AS_LOGIN=myaccount:mypassword \
+  uv run signaling-fault-proxy --port 8411
+```
+
+What it does, how to wire it into the app, and a one-command offline bench to see it work:
+[docs/signup-as-login.md](docs/signup-as-login.md) and [testbench/](testbench/).
+
 ## Reproductions
 
 Step-by-step recipes with the expected result on a build with the bug and on a fixed one, made to be

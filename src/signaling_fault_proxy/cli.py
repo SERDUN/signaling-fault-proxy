@@ -2,6 +2,14 @@
 
 Starts mitmdump as a reverse proxy to the upstream Core with the addon loaded. Any extra arguments
 after `--` go to mitmdump as they are.
+
+The Core and the test credentials can come from the environment instead of the command line, so no
+secret is typed into a shell or a script:
+
+    SFP_UPSTREAM           the Core to forward to          (same as --upstream)
+    SFP_SIGNUP_AS_LOGIN    LOGIN:PASSWORD for the stub      (same as --signup-as-login)
+
+A command-line flag, when given, wins over the matching variable.
 """
 
 from __future__ import annotations
@@ -19,7 +27,9 @@ from signaling_fault_proxy import addon
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="signaling-fault-proxy", description=__doc__.splitlines()[0])
     parser.add_argument(
-        "--upstream", required=True, help="the Core to forward to, e.g. https://core.example.com"
+        "--upstream",
+        default=os.environ.get("SFP_UPSTREAM"),
+        help="the Core to forward to, e.g. https://core.example.com (or env SFP_UPSTREAM)",
     )
     parser.add_argument("--host", default="127.0.0.1", help="address to listen on (default 127.0.0.1)")
     parser.add_argument("--port", type=int, default=8080, help="port to listen on (default 8080)")
@@ -28,9 +38,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--rules", default="", help="python files with more rules, comma-separated")
     parser.add_argument("--journal", default="", help="file to append every signaling frame to")
+    parser.add_argument(
+        "--signup-as-login",
+        default=os.environ.get("SFP_SIGNUP_AS_LOGIN", ""),
+        metavar="LOGIN:PASSWORD",
+        help="test stub: serve custom signup (POST /api/v1/user) as a normal login with these creds "
+        "(or env SFP_SIGNUP_AS_LOGIN)",
+    )
     parser.add_argument("extra", nargs=argparse.REMAINDER, help="arguments for mitmdump after --")
     args = parser.parse_args(argv)
 
+    if not args.upstream:
+        parser.error("no Core given: pass --upstream or set SFP_UPSTREAM")
     upstream = urlparse(args.upstream)
     if upstream.scheme not in ("http", "https") or not upstream.hostname:
         parser.error("--upstream must be an http(s) URL of the Core")
@@ -55,6 +74,8 @@ def main(argv: list[str] | None = None) -> int:
         f"arm={args.arm}",
         "--set",
         f"journal={args.journal}",
+        "--set",
+        f"signup_as_login={args.signup_as_login}",
         "--set",
         f"rules={','.join(str(Path(p).resolve()) for p in args.rules.split(',') if p)}",
         *extra,

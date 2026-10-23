@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Custom signup</title>
+<style>
+  :root { --accent:#5CACE3; --accent-press:#4a97cb; --line:#e3e6ea; --muted:#6b7280; --bg:#fff; --fg:#1f2430;
+          /* safe-area insets: filled from the app's onMediaQueryReady, env() is the fallback */
+          --safe-top: env(safe-area-inset-top); --safe-bottom: env(safe-area-inset-bottom); }
+  * { box-sizing: border-box; }
+  html,body { height:100%; }
+  body { margin:0; font-family:-apple-system,Segoe UI,Roboto,system-ui,sans-serif; color:var(--fg);
+         background:var(--bg); display:flex; flex-direction:column; min-height:100vh; }
+
+  .tabs { display:flex; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); z-index:2;
+          padding-top:var(--safe-top); }
+  .tab { flex:1; padding:14px 8px; text-align:center; font-size:15px; color:var(--muted);
+         background:none; border:0; border-bottom:2px solid transparent; cursor:pointer; }
+  .tab.active { color:var(--accent); border-bottom-color:var(--accent); font-weight:600; }
+
+  .page { flex:1; padding:20px 16px 96px; }
+  .hidden { display:none !important; }
+  h2 { font-size:18px; margin:4px 0 4px; }
+  .desc { color:var(--muted); font-size:14px; margin:0 0 18px; }
+
+  .method { width:100%; display:flex; align-items:center; gap:12px; padding:14px 16px; margin-bottom:12px;
+            border:1px solid var(--line); border-radius:12px; background:#fafbfc; cursor:pointer; text-align:left; }
+  .method:hover { border-color:var(--accent); }
+  .method .body { display:flex; flex-direction:column; gap:3px; min-width:0; }
+  .method .name { font-size:16px; font-weight:600; }
+  .method .blurb { font-size:13px; color:var(--muted); line-height:1.4; }
+  .method .api { font-family:ui-monospace,Menlo,monospace; font-size:12px; color:var(--accent); }
+  .method .chev { margin-left:auto; color:var(--muted); font-size:22px; }
+
+  .lead { font-size:14px; color:var(--muted); line-height:1.55; margin:0 0 18px;
+          padding:12px 14px; background:#f3f8fc; border:1px solid #e1eef8; border-radius:10px; }
+  .lead code { font-family:ui-monospace,Menlo,monospace; color:var(--fg); }
+  .note { font-size:13px; color:var(--muted); line-height:1.5; margin:4px 0 0;
+          padding:10px 12px; background:#fffaf0; border:1px solid #f1e3c4; border-radius:10px; }
+  .note code { font-family:ui-monospace,Menlo,monospace; color:var(--fg); }
+
+  .group { margin-top:14px; }
+  .group label { display:block; font-size:13px; color:#555; margin-bottom:6px; }
+  .group .opt { color:var(--muted); font-weight:400; }
+  .group input, .group select { width:100%; padding:12px; font-size:16px; border:1px solid var(--line);
+            border-radius:8px; background:#fff; }
+  .group input:focus, .group select:focus { border-color:var(--accent); outline:none; }
+
+  .back { background:none; border:0; color:var(--accent); font-size:15px; padding:0; margin-bottom:12px; cursor:pointer; }
+
+  .fab { position:fixed; left:16px; right:16px; bottom:calc(16px + var(--safe-bottom)); height:48px; border:0; border-radius:24px;
+         background:var(--accent); color:#fff; font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+         box-shadow:0 6px 14px rgba(0,0,0,.15); }
+  .fab:disabled { background:#cfd4da; cursor:not-allowed; }
+  .fab.loading .label { visibility:hidden; }
+  .fab .spin { position:absolute; width:20px; height:20px; border:3px solid rgba(255,255,255,.5); border-top-color:#fff;
+               border-radius:50%; animation:spin 1s linear infinite; display:none; }
+  .fab.loading .spin { display:block; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  .info { color:var(--muted); font-size:14px; line-height:1.6; }
+  .info code { font-family:ui-monospace,Menlo,monospace; color:var(--fg); }
+</style>
+</head>
+<body>
+
+<div class="tabs">
+  <button class="tab active" data-tab="login" id="tabLoginBtn">Sign in</button>
+  <button class="tab" data-tab="help">Help</button>
+  <button class="tab" data-tab="about">About</button>
+</div>
+
+<!-- Sign in tab: step 1 picks a method (a representation of the API from the web UI),
+     step 2 (next page) asks that method's fields -->
+<section class="page" id="tab-login">
+  <div id="methods">
+    <h2 id="methodsTitle">Sign in to PortaPhone</h2>
+    <p class="lead" id="methodsLead">
+      This page runs inside the app's <code>WebView</code>. It collects your details and hands them to
+      the app over <code>WebtritLoginChannel</code>; the app then calls the PortaPhone Core API. Pick a
+      method - the next page asks only for its fields.
+    </p>
+    <div id="methodList"></div>
+  </div>
+
+  <div id="fields" class="hidden">
+    <button class="back" id="backBtn">‹ Back</button>
+    <h2 id="fieldsTitle">Enter your details</h2>
+    <p class="desc" id="fieldsDesc"></p>
+    <div id="fieldHost"></div>
+    <p class="note hidden" id="fieldsNote"></p>
+  </div>
+</section>
+
+<section class="page hidden" id="tab-help">
+  <h2>Help</h2>
+  <p class="info">A demo signup page served to the PortaPhone app's WebView. Pick a method on the first
+  tab, fill the fields on the next page, and submit - the app turns it into a login through the
+  signaling-fault-proxy.</p>
+</section>
+
+<section class="page hidden" id="tab-about">
+  <h2>About</h2>
+  <p class="info"><code>custom_signup_tabs</code> - a multi-tab, two-step embedded signup used by the
+  signaling-fault-proxy bench to exercise the PortaPhone embedded login flow.</p>
+</section>
+
+<button class="fab hidden" id="submit"><span class="label" id="submitLabel">Submit</span><span class="spin"></span></button>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  // Each method's fields. The proxy turns the submit into a login; Custom signup additionally lets
+  // you type login/password - optional, empty means the proxy's own account.
+  const METHODS = {
+    email: {
+      name: "Email one-time code",
+      blurb: "The app emails you a code, then exchanges it for a session.",
+      api: "POST /api/v1/session/otp-create -> otp-verify",
+      title: "Email login", desc: "Enter the email the code is sent to.",
+      fields: [{ name: "email", label: "Email", type: "email", required: true }],
+    },
+    account: {
+      name: "Account & password",
+      blurb: "Classic sign-in with an account number and password.",
+      api: "POST /api/v1/session",
+      title: "Account login", desc: "Enter your account number and password.",
+      fields: [{ name: "account", label: "Account number", type: "text", required: true },
+               { name: "password", label: "Password", type: "password", required: true }],
+    },
+    custom: {
+      name: "Custom signup",
+      blurb: "Register and sign in in one step with a custom form.",
+      api: "POST /api/v1/user",
+      title: "Custom signup", desc: "These predefined fields go to the signup.",
+      fields: [{ name: "email", label: "Email", type: "email", required: true },
+               { name: "full_name", label: "Full name", type: "text" },
+               { name: "clinic", label: "Clinic", type: "select", options: ["Clinic A", "Clinic B", "Clinic C"] },
+               { name: "login", label: "Login", type: "text", optional: true },
+               { name: "password", label: "Password", type: "password", optional: true }],
+      note: "Login and password are optional. Empty - the proxy signs in as the account it is " +
+            "configured with (<code>--signup-as-login</code>). Filled - it signs in as that account instead.",
+    },
+  };
+
+  // Render the method cards from the data: name + explanation + the API call each represents.
+  const list = $("methodList");
+  for (const [key, m] of Object.entries(METHODS)) {
+    const b = document.createElement("button");
+    b.className = "method"; b.dataset.method = key;
+    b.innerHTML =
+      `<span class="body"><span class="name">${m.name}</span>` +
+      `<span class="blurb">${m.blurb}</span><span class="api">${m.api}</span></span>` +
+      `<span class="chev">›</span>`;
+    b.addEventListener("click", () => openFields(key));
+    list.appendChild(b);
+  }
+
+  let current = null; // the chosen method key
+
+  // --- tabs ---
+  document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => selectTab(t.dataset.tab)));
+  function selectTab(name) {
+    document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
+    for (const p of ["login", "help", "about"]) $("tab-" + p).classList.toggle("hidden", p !== name);
+    $("submit").classList.toggle("hidden", !(name === "login" && current));
+  }
+
+  // --- step 1 -> step 2 (method cards are wired to openFields above) ---
+  function openFields(method) {
+    current = method;
+    const m = METHODS[method];
+    $("fieldsTitle").textContent = m.title;
+    $("fieldsDesc").textContent = m.desc;
+    const host = $("fieldHost");
+    host.innerHTML = "";
+    for (const f of m.fields) {
+      const g = document.createElement("div"); g.className = "group";
+      const lab = document.createElement("label"); lab.htmlFor = "f_" + f.name;
+      lab.textContent = f.label;
+      if (f.optional) { const s = document.createElement("span"); s.className = "opt"; s.textContent = " - optional"; lab.appendChild(s); }
+      g.appendChild(lab);
+      let input;
+      if (f.type === "select") {
+        input = document.createElement("select");
+        for (const o of f.options) { const opt = document.createElement("option"); opt.value = o; opt.textContent = o; input.appendChild(opt); }
+      } else {
+        input = document.createElement("input"); input.type = f.type;
+        input.autocomplete = "off"; input.autocapitalize = "none"; input.spellcheck = false;
+      }
+      input.id = "f_" + f.name; input.name = f.name;
+      g.appendChild(input); host.appendChild(g);
+    }
+    const note = $("fieldsNote");
+    if (m.note) { note.innerHTML = m.note; note.classList.remove("hidden"); }
+    else { note.classList.add("hidden"); }
+    $("methods").classList.add("hidden");
+    $("fields").classList.remove("hidden");
+    $("submit").classList.remove("hidden");
+  }
+
+  $("backBtn").addEventListener("click", () => {
+    current = null;
+    $("fields").classList.add("hidden");
+    $("methods").classList.remove("hidden");
+    $("submit").classList.add("hidden");
+  });
+
+  // --- submit -> hand the data to the app; empty optional fields are left out ---
+  $("submit").addEventListener("click", () => {
+    const m = METHODS[current];
+    const data = { method: current };
+    for (const f of m.fields) {
+      const v = $("f_" + f.name).value;
+      if (f.required && !v) { $("f_" + f.name).focus(); return; }
+      if (v || !f.optional) data[f.name] = v;   // omit empty optional fields (e.g. login/password)
+    }
+    $("submit").classList.add("loading"); $("submit").disabled = true;
+    WebtritLoginChannel.postMessage(JSON.stringify({ event: "signup", data }));
+  });
+
+  // The app injects safe-area insets (and theme) through this on load and on rotation.
+  // Values are logical pixels, which map straight to CSS px.
+  window.onMediaQueryReady = function (m) {
+    if (!m) return;
+    const root = document.documentElement.style;
+    if (typeof m.topSafeInset === "number") root.setProperty("--safe-top", m.topSafeInset + "px");
+    if (typeof m.bottomSafeInset === "number") root.setProperty("--safe-bottom", m.bottomSafeInset + "px");
+    if (m.brightness) document.documentElement.dataset.brightness = m.brightness;
+  };
+
+  // The app calls this after load with { locale }.
+  const I18N = {
+    en: { methodsTitle: "Sign in to PortaPhone", submit: "Submit" },
+    uk: { methodsTitle: "Вхід у PortaPhone", submit: "Надіслати" },
+  };
+  window.initializePage = function (initData) {
+    const t = I18N[(initData && initData.locale) || "en"]; if (!t) return;
+    $("methodsTitle").textContent = t.methodsTitle;
+    $("submitLabel").textContent = t.submit;
+  };
+</script>
+</body>
+</html>

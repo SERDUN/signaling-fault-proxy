@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>signup-as-login bench</title>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --line:#2a2f3a; --fg:#e6e9ef; --muted:#9aa4b2;
+          --ok:#3fb950; --err:#f85149; --accent:#5CACE3; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; background:var(--bg); color:var(--fg); }
+  header { padding:12px 16px; border-bottom:1px solid var(--line); display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  header h1 { font-size:15px; margin:0; font-weight:600; }
+  header label { color:var(--muted); font-size:12px; }
+  header input { background:#0b0d11; color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:6px 8px; font:inherit; min-width:230px; }
+  main { display:grid; grid-template-columns:380px 1fr; gap:0; height:calc(100vh - 54px); }
+  @media (max-width:760px){ main{ grid-template-columns:1fr; height:auto; } }
+  .pane { min-height:0; display:flex; flex-direction:column; }
+  .pane + .pane { border-left:1px solid var(--line); }
+  .pane h2 { font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:0; padding:10px 14px; border-bottom:1px solid var(--line); }
+  iframe { flex:1; width:100%; border:0; background:#fff; min-height:520px; }
+  #log { flex:1; overflow:auto; margin:0; padding:12px 14px; white-space:pre-wrap; word-break:break-word; }
+  .row { padding:8px 10px; border:1px solid var(--line); border-radius:8px; margin-bottom:10px; background:var(--panel); }
+  .row .k { color:var(--muted); }
+  .tag { display:inline-block; padding:1px 8px; border-radius:999px; font-size:11px; font-weight:600; }
+  .tag.send { background:rgba(92,172,227,.15); color:var(--accent); }
+  .tag.ok { background:rgba(63,185,80,.15); color:var(--ok); }
+  .tag.err { background:rgba(248,81,73,.15); color:var(--err); }
+  code { color:#d2a8ff; }
+  .hint { color:var(--muted); padding:10px 14px; border-top:1px solid var(--line); font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>signup-as-login bench</h1>
+  <label>proxy <input id="proxy" value="http://127.0.0.1:8411"></label>
+  <label>device id <input id="device" value="bench-device-0001"></label>
+  <span id="session" class="tag err" style="margin-left:auto">session: none</span>
+</header>
+<main>
+  <section class="pane">
+    <h2>embedded custom-signup page</h2>
+    <iframe id="page" src="embedded/custom_signup_patient.html"></iframe>
+    <div class="hint">The page posts <code>{event:"signup", data}</code> to <code>WebtritLoginChannel</code>, exactly as inside the app's WebView. This bench stands in for the app: it turns that into <code>POST /api/v1/user</code> to the proxy.</div>
+  </section>
+  <section class="pane">
+    <h2>signup &rarr; token &rarr; session entered</h2>
+    <div id="log"></div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const log = $("log");
+
+function card(tagClass, tagText, title, obj) {
+  const row = document.createElement("div");
+  row.className = "row";
+  row.innerHTML =
+    `<div><span class="tag ${tagClass}">${tagText}</span> <span class="k">${title}</span></div>` +
+    `<pre style="margin:6px 0 0">${escapeHtml(typeof obj === "string" ? obj : JSON.stringify(obj, null, 2))}</pre>`;
+  log.prepend(row);
+  return row;
+}
+function escapeHtml(s){ return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+// The app's side of the embedded flow: receive the signup message, build the
+// SessionUserCredential body the app would send, and POST it to the proxy.
+async function onSignup(message) {
+  let parsed;
+  try { parsed = JSON.parse(message); } catch { return card("err", "bad", "unparseable channel message", message); }
+  if (parsed.event !== "signup") return card("send", parsed.event || "?", "ignored channel event", parsed);
+
+  const data = parsed.data || {};
+  const tenantId = data.tenant_id;
+  const base = $("proxy").value.replace(/\/$/, "");
+  const url = tenantId ? `${base}/tenant/${encodeURIComponent(tenantId)}/api/v1/user`
+                       : `${base}/api/v1/user`;
+
+  // Same shape the app's api client sends for createUser: device identity + the form data.
+  const body = { identifier: $("device").value, type: "mobile", bundle_id: "com.webtrit.bench", ...data };
+
+  card("send", "POST", url, body);
+  let payload;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    try { payload = JSON.parse(text); } catch { payload = text; }
+    if (!(res.ok && payload && payload.token)) {
+      card("err", res.status, "no token - signup was not turned into a login", payload);
+      return;
+    }
+    card("ok", res.status, "signup returned a session token", payload);
+  } catch (e) {
+    return card("err", "network", "request failed (proxy up? CORS?)", String(e));
+  }
+
+  // A token is not a session yet. Enter it the way the app does right after login:
+  // GET /api/v1/user with the Bearer. Only a 200 here means we are really logged in.
+  await enterSession(base, tenantId, payload.token);
+}
+
+// Use the token to actually enter the session - fetch the live profile, as the app
+// does with getUserInfo(token) once a login succeeds.
+async function enterSession(base, tenantId, token) {
+  const url = tenantId ? `${base}/tenant/${encodeURIComponent(tenantId)}/api/v1/user`
+                       : `${base}/api/v1/user`;
+  card("send", "GET", url + "   (Authorization: Bearer " + token + ")", "entering the session…");
+  try {
+    const res = await fetch(url, { headers: { authorization: "Bearer " + token } });
+    const text = await res.text();
+    let profile; try { profile = JSON.parse(text); } catch { profile = text; }
+    if (res.ok) {
+      const who = profile.email || (profile.first_name + " " + profile.last_name) || "user";
+      card("ok", res.status, "LOGGED IN - session is live, this is the account behind it", profile);
+      setSession(true, who);
+    } else {
+      card("err", res.status, "token was rejected - not logged in", profile);
+      setSession(false);
+    }
+  } catch (e) {
+    card("err", "network", "could not enter the session", String(e));
+    setSession(false);
+  }
+}
+
+function setSession(active, who) {
+  const el = $("session");
+  el.className = "tag " + (active ? "ok" : "err");
+  el.textContent = active ? ("session: active (" + who + ")") : "session: none";
+}
+
+// Inject the channel into the embedded page, just as the app injects it into its WebView.
+$("page").addEventListener("load", () => {
+  const win = $("page").contentWindow;
+  win.WebtritLoginChannel = { postMessage: onSignup };
+  if (typeof win.initializePage === "function") win.initializePage({ locale: "en" });
+  card("send", "ready", "channel injected into the embedded page", "fill the email and press Submit");
+});
+</script>
+</body>
+</html>
