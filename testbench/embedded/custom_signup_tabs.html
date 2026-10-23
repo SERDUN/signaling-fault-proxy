@@ -119,14 +119,14 @@
       blurb: "The app emails you a code, then exchanges it for a session.",
       api: "POST /api/v1/session/otp-create -> otp-verify",
       title: "Email login", desc: "Enter the email the code is sent to.",
-      fields: [{ name: "email", label: "Email", type: "email", required: true }],
+      fields: [{ name: "email", label: "Email", type: "email", required: true, value: "demo@bench.local" }],
     },
     passwordSignin: {
       name: "Password sign-in",
       blurb: "Sign in with an account login and password.",
       api: "POST /api/v1/session",
       title: "Password sign-in", desc: "Enter your login and password.",
-      fields: [{ name: "login", label: "Login", type: "text", required: true },
+      fields: [{ name: "login", label: "Login", type: "text", required: true, value: "111000333" },
                { name: "password", label: "Password", type: "password", required: true }],
     },
     custom: {
@@ -134,10 +134,10 @@
       blurb: "Register and sign in in one step with a custom form.",
       api: "POST /api/v1/user",
       title: "Custom signup", desc: "These predefined fields go to the signup.",
-      fields: [{ name: "email", label: "Email", type: "email", required: true },
-               { name: "full_name", label: "Full name", type: "text" },
+      fields: [{ name: "email", label: "Email", type: "email", required: true, value: "demo@bench.local" },
+               { name: "full_name", label: "Full name", type: "text", value: "Test User" },
                { name: "clinic", label: "Clinic", type: "select", options: ["Clinic A", "Clinic B", "Clinic C"] },
-               { name: "login", label: "Login", type: "text", required: true },
+               { name: "login", label: "Login", type: "text", required: true, value: "111000333" },
                { name: "password", label: "Password", type: "password", required: true }],
       note: "The proxy holds no account - it signs in as the login and password you enter here. They " +
             "go to <code>POST /api/v1/user</code>, which the proxy turns into a login as this account.",
@@ -188,6 +188,7 @@
       } else {
         input = document.createElement("input"); input.type = f.type;
         input.autocomplete = "off"; input.autocapitalize = "none"; input.spellcheck = false;
+        if (f.value) input.value = f.value;  // prefill so you don't have to type
       }
       input.id = "f_" + f.name; input.name = f.name;
       g.appendChild(input); host.appendChild(g);
