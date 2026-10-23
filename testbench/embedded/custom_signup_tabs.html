@@ -208,10 +208,11 @@
     $("submit").classList.add("hidden");
   });
 
-  // The app listens for window messages and hands them to the channel - on web, and on a phone too
-  // (WT-1964 / gerrit 364698). So the page posts to its parent alone, with no check for where it runs.
+  // The app's WebView provides WebtritLoginChannel. In a browser (the configurator's Realtime
+  // preview) the page is an iframe with no such object, so it posts to the parent window instead.
   function sendToApp(message) {
-    window.parent.postMessage({ channel: "WebtritLoginChannel", message: message }, "*");
+    if (window.WebtritLoginChannel) WebtritLoginChannel.postMessage(message);
+    else window.parent.postMessage({ channel: "WebtritLoginChannel", message: message }, "*");
   }
 
   // --- submit -> hand the data to the app; empty optional fields are left out ---
