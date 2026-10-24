@@ -11,6 +11,9 @@ embedded login can be tested and debugged without the vendor's production.
   `index.html`, as the page routes on the client) and plays its backend under `/api/v1`.
 - `accounts.json` - synthetic accounts, the SMS code, bundles, friends.
 
+How this page was made, and how to add another one the same way: [docs/vendor-pages.md](../../docs/vendor-pages.md).
+It is used by [embedded page stuck after a device limit](../../docs/reproduce/embedded-page-stuck-after-device-limit.md).
+
 The page reads its API from `window.location.origin + "/api/v1"`, so it only works when served by
 `mock_backend.py`. The copy GitHub Pages publishes under `testbench/vendor-spa/site/` has no backend
 and is not meant to be opened.

@@ -121,9 +121,9 @@ SFP_UPSTREAM=https://core.example.com SFP_SIGNUP_AS_LOGIN=myaccount:mypassword \
 What it does, how to wire it into the app, and a one-command offline bench to see it work:
 [docs/signup-as-login.md](docs/signup-as-login.md) and [testbench/](testbench/).
 
-A production vendor's login page (a single-page app, rebranded) with a mock of its backend, to run
-the app's embedded login against a real-world page without the vendor's production:
-[testbench/vendor-spa/](testbench/vendor-spa/README.md).
+Real customers' pages, copied once, rebranded and served with a mock of their backend, so the app is
+tested against what is out there without the vendors' production - what exists, how to add one and
+how to run one with the app: [docs/vendor-pages.md](docs/vendor-pages.md).
 
 ## Reproductions
 
@@ -132,6 +132,8 @@ linked from a review or a ticket - the list and how to add one: [docs/reproduce]
 
 - [Lost trickle request after an ICE restart ends the call](docs/reproduce/lost-trickle-after-ice-restart.md)
   (WT-2071) - script: [`scripts/android-ice-restart-on-wifi-off.sh`](scripts/android-ice-restart-on-wifi-off.sh)
+- [Embedded login page stuck after a device-limit refusal](docs/reproduce/embedded-page-stuck-after-device-limit.md)
+  Core's refusals from `/__proxy/mock`, with our form page or a [vendor page](docs/vendor-pages.md)
 
 ## Options
 

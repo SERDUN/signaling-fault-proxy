@@ -6,6 +6,7 @@ build each do - so a review comment or a ticket can link the page instead of ret
 | Page | Bug | Rule | Script |
 |---|---|---|---|
 | [lost-trickle-after-ice-restart.md](lost-trickle-after-ice-restart.md) | WT-2071: a candidate request lost with the signaling after an ICE restart ends the call | `close-trickle-after-update` | [`android-ice-restart-on-wifi-off.sh`](../../scripts/android-ice-restart-on-wifi-off.sh) |
+| [embedded-page-stuck-after-device-limit.md](embedded-page-stuck-after-device-limit.md) | An embedded login page stays disabled after a device-limit refusal and four other ends without a session | `/__proxy/mock` (canned Core answer) | - |
 
 ## Adding one
 
