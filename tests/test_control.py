@@ -79,11 +79,19 @@ def test_otp_mock_replays_the_login_on_verify():
     assert p._mock_response(signup) is not None  # the signup gets the otp mock
     assert p._mock_pending_login == {"identifier": "d", "type": "mobile", "login": "acc", "password": "pw"}
     verify = Request.make(
-        "POST", "http://h/api/v1/session/otp-verify", json.dumps({"otp_id": "x", "code": "1"}), {"content-type": "application/json"}
+        "POST",
+        "http://h/api/v1/session/otp-verify",
+        json.dumps({"otp_id": "x", "code": "1"}),
+        {"content-type": "application/json"},
     )
     assert p._mock_response(verify) is None  # not answered - forwarded as a real login
     assert verify.path == "/api/v1/session"
-    assert json.loads(verify.get_text()) == {"identifier": "d", "type": "mobile", "login": "acc", "password": "pw"}
+    assert json.loads(verify.get_text()) == {
+        "identifier": "d",
+        "type": "mobile",
+        "login": "acc",
+        "password": "pw",
+    }
 
 
 def test_non_otp_mock_leaves_verify_alone():

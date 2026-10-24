@@ -62,7 +62,12 @@ def test_body_credentials_work_with_no_default():
         creds=None,
     )
     assert req.path == "/api/v1/session"
-    assert json.loads(req.get_text()) == {"identifier": "dev-uuid", "type": "mobile", "login": "bob", "password": "pw"}
+    assert json.loads(req.get_text()) == {
+        "identifier": "dev-uuid",
+        "type": "mobile",
+        "login": "bob",
+        "password": "pw",
+    }
 
 
 def test_no_default_and_no_body_login_is_left_untouched():
@@ -77,7 +82,8 @@ def test_rewrite_off_sends_the_signup_to_core_untouched():
     proxy._signup_login = ("acc", "pw")
     proxy._rewrite_signup = False
     req = signup_request(
-        "http://127.0.0.1:8080/api/v1/user", {"identifier": "d", "type": "mobile", "login": "x", "password": "y"}
+        "http://127.0.0.1:8080/api/v1/user",
+        {"identifier": "d", "type": "mobile", "login": "x", "password": "y"},
     )
     proxy._signup_as_login(req)
     assert req.path == "/api/v1/user"  # not rewritten - the Core handles the signup
