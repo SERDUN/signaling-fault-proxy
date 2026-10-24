@@ -99,3 +99,20 @@ def test_route_http_core_uses_port_80():
     req = Request.make("GET", "http://127.0.0.1:8080/x")
     p._route(req)
     assert (req.scheme, req.host, req.port) == ("http", "core.local", 4000)
+
+
+def test_status_counts_every_signup_post_mocked_or_not():
+    from mitmproxy.test import tflow
+
+    p = SignalingFaultProxy()
+    p._set_core("https://core.example.com")
+    assert p._status()["signups"] == 0
+    p._set_mock((409, '{"code": "device_limit_reached"}'))
+    mocked = tflow.tflow(req=Request.make("POST", "http://127.0.0.1:8080/api/v1/user", b"{}"))
+    p.request(mocked)
+    assert mocked.response is not None and mocked.response.status_code == 409
+    p._set_mock(None)
+    p.request(tflow.tflow(req=Request.make("POST", "http://127.0.0.1:8080/api/v1/user", b"{}")))
+    p.request(tflow.tflow(req=Request.make("GET", "http://127.0.0.1:8080/api/v1/user")))
+    p.request(tflow.tflow(req=Request.make("POST", "http://127.0.0.1:8080/api/v1/session", b"{}")))
+    assert p._status()["signups"] == 2

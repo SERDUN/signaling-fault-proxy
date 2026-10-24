@@ -73,7 +73,7 @@ that drives all of this from a browser.
 | Request | Answer |
 |---|---|
 | `GET /__proxy/` | the dashboard page |
-| `GET /__proxy/status` | Core, signup account (login only), armed rules, live signaling connections, known rules |
+| `GET /__proxy/status` | Core, signup account (login only), armed rules, live signaling connections, `signups` (signup POSTs seen since start, mocked or sent to the Core; a test reads the change across a step), known rules |
 | `GET /__proxy/core?url=<url>` | sets the Core to forward to (runtime) |
 | `GET /__proxy/signup?login=<l>&password=<p>` | sets the signup-as-login account; `?off=1` clears it |
 | `GET /__proxy/arm?rule=<name>[&<param>=<value>...]` | arms a rule with its parameters; `400` for an unknown rule or parameter |

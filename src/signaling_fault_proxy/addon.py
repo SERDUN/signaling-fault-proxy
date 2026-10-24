@@ -43,6 +43,7 @@ class SignalingFaultProxy:
         self._rewrite_signup = True  # off -> custom signup goes to Core untouched (real signup backend)
         self._signup_mock: tuple[int, str] | None = None  # (status, body): answer signup with this, no Core
         self._mock_pending_login: dict | None = None  # creds from an OTP-mock signup, replayed on otp-verify
+        self._signups = 0  # signup POSTs seen since start, answered by a mock or sent to the Core
 
     def load(self, loader) -> None:
         loader.add_option("journal", str, "", "file to append every signaling frame to (JSON lines)")
@@ -87,6 +88,9 @@ class SignalingFaultProxy:
     def request(self, flow: http.HTTPFlow) -> None:
         path = flow.request.path
         if not path.startswith(CONTROL_PREFIX):
+            if self._is_signup_post(flow.request):
+                self._signups += 1
+                self._note(f"signup #{self._signups}: {'mock ' + str(self._signup_mock[0]) if self._signup_mock else 'to the Core'}")
             if self._signup_mock is not None:
                 resp = self._mock_response(flow.request)  # may also rewrite the request for a real login
                 if resp is not None:
@@ -278,6 +282,7 @@ class SignalingFaultProxy:
             "signup_as_login": self._signup_login[0] if self._signup_login else None,  # login only
             "armed": self.rules.describe(),
             "signaling_connections": len([f for f in self.live if f.websocket is not None]),
+            "signups": self._signups,
             "rules": sorted(RULES),
         }
 
