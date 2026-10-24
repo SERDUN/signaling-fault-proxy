@@ -90,7 +90,9 @@ class SignalingFaultProxy:
         if not path.startswith(CONTROL_PREFIX):
             if self._is_signup_post(flow.request):
                 self._signups += 1
-                self._note(f"signup #{self._signups}: {'mock ' + str(self._signup_mock[0]) if self._signup_mock else 'to the Core'}")
+                self._note(
+                    f"signup #{self._signups}: {'mock ' + str(self._signup_mock[0]) if self._signup_mock else 'to the Core'}"
+                )
             if self._signup_mock is not None:
                 resp = self._mock_response(flow.request)  # may also rewrite the request for a real login
                 if resp is not None:
@@ -131,7 +133,9 @@ class SignalingFaultProxy:
                 self._rewrite_signup = not query.get("off")
                 self._note(f"signup rewrite {'on' if self._rewrite_signup else 'off (Core handles signup)'}")
             elif command == "mock":
-                self._set_mock(None if query.get("off") else (int(query.get("status", 200)), query.get("body", "")))
+                self._set_mock(
+                    None if query.get("off") else (int(query.get("status", 200)), query.get("body", ""))
+                )
             elif command != "status":
                 raise ValueError(f"unknown command {command!r}")
             flow.response = _json(200, self._status())
@@ -278,7 +282,9 @@ class SignalingFaultProxy:
         return {
             "core": self._upstream,
             "rewrite_signup": self._rewrite_signup,
-            "signup_mock": {"status": self._signup_mock[0], "body": self._signup_mock[1]} if self._signup_mock else None,
+            "signup_mock": {"status": self._signup_mock[0], "body": self._signup_mock[1]}
+            if self._signup_mock
+            else None,
             "signup_as_login": self._signup_login[0] if self._signup_login else None,  # login only
             "armed": self.rules.describe(),
             "signaling_connections": len([f for f in self.live if f.websocket is not None]),
