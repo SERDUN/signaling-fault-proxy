@@ -1,0 +1,5 @@
+<svg width="326" height="112" viewBox="0 0 326 112" xmlns="http://www.w3.org/2000/svg">
+  <rect x="20" y="16" width="80" height="80" rx="20" fill="white" opacity="0.9"/>
+  <text x="60" y="68" font-family="Arial, sans-serif" font-size="40" font-weight="700" text-anchor="middle" fill="#0054A6">DV</text>
+  <text x="116" y="70" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="#0054A6" stroke="white" stroke-width="0.5">Demo Vendor</text>
+</svg>

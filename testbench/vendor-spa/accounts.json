@@ -1,0 +1,49 @@
+{
+  "_comment": "Synthetic accounts for mock_backend.py. Any number not listed can register through Register; every number gets the same SMS code.",
+  "version": "1.4.2",
+  "otp": "123456",
+  "otp_hint": null,
+  "currency": "ZAR",
+  "new_account_user_class": "OPS",
+  "countries": {
+    "US": {"extra_info": {"discount_code": {"mandatory": false}, "email": {"mandatory": true}}},
+    "GB": {"extra_info": {"discount_code": {"mandatory": false}, "email": {"mandatory": true}}},
+    "ZA": {"extra_info": {"discount_code": {"mandatory": false}}}
+  },
+  "accounts": [
+    {
+      "msisdn": "27710000001",
+      "registered": true,
+      "user_class": "OPS",
+      "first_name": "Demo",
+      "last_name": "Caller",
+      "alias": "Demo",
+      "email": "demo.caller@example.com",
+      "active_subscription": null,
+      "history": [],
+      "friends": [{"msisdn": "263770000001", "alias": "Friend One"}]
+    },
+    {
+      "msisdn": "27710000002",
+      "registered": true,
+      "user_class": "OPZ",
+      "first_name": "Second",
+      "last_name": "Caller",
+      "alias": "Second",
+      "email": "second.caller@example.com",
+      "active_subscription": {"expiration_date": "2099-01-01T00:00:00+00:00", "remaining_seconds": 7200},
+      "history": [
+        {"start": "2026-09-01T10:00:00+00:00", "end": "2026-10-01T10:00:00+00:00", "volume": 300, "period": 30, "price": 99.0}
+      ],
+      "friends": []
+    }
+  ],
+  "external_token_accounts": {"mock-external-token": "27710000001"},
+  "invite_preview": "Join me on the Demo Vendor App: https://example.com/",
+  "friend_prefixes": ["+26377", "+26378"],
+  "providers": ["ops", "emerald"],
+  "bundles": [
+    {"id": "b300", "volume": 300, "period": 30, "price": 99.0, "discounted_price": 79.0},
+    {"id": "b100", "volume": 100, "period": 7, "price": 39.0, "discounted_price": 29.0}
+  ]
+}

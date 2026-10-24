@@ -121,6 +121,10 @@ SFP_UPSTREAM=https://core.example.com SFP_SIGNUP_AS_LOGIN=myaccount:mypassword \
 What it does, how to wire it into the app, and a one-command offline bench to see it work:
 [docs/signup-as-login.md](docs/signup-as-login.md) and [testbench/](testbench/).
 
+A production vendor's login page (a single-page app, rebranded) with a mock of its backend, to run
+the app's embedded login against a real-world page without the vendor's production:
+[testbench/vendor-spa/](testbench/vendor-spa/README.md).
+
 ## Reproductions
 
 Step-by-step recipes with the expected result on a build with the bug and on a fixed one, made to be
