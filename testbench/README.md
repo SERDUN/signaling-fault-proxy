@@ -71,6 +71,20 @@ Build the app pointed at the proxy and wire the embedded page into its config; t
 the app's own WebView against the same proxy. The two config files and the `adb reverse` step are in
 [docs/signup-as-login.md](../docs/signup-as-login.md).
 
+## Identifiers of `custom_signup_tabs.html`
+
+Android's WebView shows an element's HTML `id` as the `resource-id` of its node in the
+accessibility tree (`uiautomator dump`), so a QA case drives this page by identifiers, the way it
+drives the app. These ids are a contract: a case relies on them, so they are not renamed.
+
+| id | element |
+|---|---|
+| `method-email`, `method-passwordSignin`, `method-custom` | the method cards of the first screen |
+| `f_<field>` (`f_email`, `f_full_name`, `f_clinic`, `f_login`, `f_password`) | the fields of the open method |
+| `submit` | the Submit button: `enabled="false"` while the page waits for the app after a submit |
+| `backBtn` | the page's own "Back" link to the method cards |
+| `tabLoginBtn` | the "Sign in" tab |
+
 ## Tenant
 
 If the embedded page puts `tenant_id` in `data`, the client posts to `/tenant/<id>/api/v1/user` and the

@@ -149,6 +149,7 @@
   for (const [key, m] of Object.entries(METHODS)) {
     const b = document.createElement("button");
     b.className = "method"; b.dataset.method = key;
+    b.id = "method-" + key; // a stable id: the app's WebView shows it as the node's resource-id
     b.innerHTML =
       `<span class="body"><span class="name">${m.name}</span>` +
       `<span class="blurb">${m.blurb}</span><span class="api">${m.api}</span></span>` +
