@@ -52,7 +52,9 @@ dashboard; the page's presets fill an OTP, a token or a data body.
 
 An OTP mock stands in for the whole OTP flow, not just the first step: the proxy also answers
 `otp-create` (resend) and, on `otp-verify`, replays the credentials the signup carried as a real login
-against the Core - so any code the user types completes the OTP screen into a genuine session.
+against the Core - so any code the user types completes the OTP screen into a genuine session. Add
+`&verify_status=<n>&verify_body=<json>` to the OTP mock and the verify gets that answer instead, never
+reaching the Core - a refusal of the code step, such as a `409` device limit after the code.
 
 The rewrite is scoped to `POST` on a path ending `/api/v1/user`. Everything else - including the
 `GET /api/v1/system-info` the app fetches right after login, and all the authenticated calls after
