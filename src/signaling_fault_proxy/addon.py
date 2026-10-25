@@ -43,6 +43,7 @@ class SignalingFaultProxy:
         self._rewrite_signup = True  # off -> custom signup goes to Core untouched (real signup backend)
         self._signup_mock: tuple[int, str] | None = None  # (status, body): answer signup with this, no Core
         self._mock_pending_login: dict | None = None  # creds from an OTP-mock signup, replayed on otp-verify
+        self._verify_mock: tuple[int, str] | None = None  # (status, body): answer otp-verify of an OTP mock
         self._signups = 0  # signup POSTs seen since start, answered by a mock or sent to the Core
 
     def load(self, loader) -> None:
@@ -133,8 +134,14 @@ class SignalingFaultProxy:
                 self._rewrite_signup = not query.get("off")
                 self._note(f"signup rewrite {'on' if self._rewrite_signup else 'off (Core handles signup)'}")
             elif command == "mock":
+                verify = (
+                    (int(query["verify_status"]), query.get("verify_body", ""))
+                    if query.get("verify_status")
+                    else None
+                )
                 self._set_mock(
-                    None if query.get("off") else (int(query.get("status", 200)), query.get("body", ""))
+                    None if query.get("off") else (int(query.get("status", 200)), query.get("body", "")),
+                    verify=verify,
                 )
             elif command != "status":
                 raise ValueError(f"unknown command {command!r}")
@@ -157,7 +164,8 @@ class SignalingFaultProxy:
         """The answer a configured mock gives, or None to let the request go to the Core (possibly
         after a rewrite). An OTP mock also stands in for the otp-create/otp-verify steps, so the whole
         OTP flow completes: the credentials the signup carried are replayed as a real login on verify,
-        so the app ends up in a genuine session - whatever code the user types."""
+        so the app ends up in a genuine session - whatever code the user types - unless the mock
+        names an answer of its own for the verify (a refusal of the code step)."""
         status, body = self._signup_mock
         canned = http.Response.make(status, body, {"content-type": "application/json"})
         if self._is_signup_post(req):
@@ -170,6 +178,10 @@ class SignalingFaultProxy:
         if req.method == "POST" and path.endswith(OTP_CREATE_SUFFIX):
             return canned  # a resend hands back the same otp
         if req.method == "POST" and path.endswith(OTP_VERIFY_SUFFIX):
+            if self._verify_mock is not None:
+                verify_status, verify_body = self._verify_mock
+                self._note(f"otp mock: verify answered {verify_status}")
+                return http.Response.make(verify_status, verify_body, {"content-type": "application/json"})
             if self._mock_pending_login is not None:
                 self._rewrite_otp_verify_to_login(req)
                 return None  # forward to Core as a real login
@@ -199,19 +211,29 @@ class SignalingFaultProxy:
         req.path = b + sep + query
         self._note(f"otp mock: verify -> real login as {self._mock_pending_login.get('login')}")
 
-    def _set_mock(self, mock: tuple[int, str] | None) -> None:
+    def _set_mock(self, mock: tuple[int, str] | None, verify: tuple[int, str] | None = None) -> None:
+        """`verify` answers the otp-verify of an OTP mock in place of the replayed login."""
         self._mock_pending_login = None
+        self._verify_mock = None
         if mock is None:
             self._signup_mock = None
             self._note("signup mock off")
             return
         status, body = mock
-        try:
-            json.loads(body or "{}")
-        except ValueError:
-            raise ValueError("mock body must be JSON")
+        for what in (body, verify[1] if verify else ""):
+            try:
+                json.loads(what or "{}")
+            except ValueError:
+                raise ValueError("mock body must be JSON")
         self._signup_mock = (status, body or "{}")
-        self._note(f"signup mock on: {status} {self._signup_mock[1][:80]}")
+        if verify is not None:
+            if "otp_id" not in json.loads(self._signup_mock[1]):
+                raise ValueError("a verify answer needs an OTP mock (a body with otp_id)")
+            self._verify_mock = (verify[0], verify[1] or "{}")
+        self._note(
+            f"signup mock on: {status} {self._signup_mock[1][:80]}"
+            + (f", verify {self._verify_mock[0]}" if self._verify_mock else "")
+        )
 
     def _signup_as_login(self, req: http.Request) -> None:
         """Rewrite `POST .../api/v1/user` (custom signup) into `POST .../api/v1/session` (login).
@@ -282,7 +304,13 @@ class SignalingFaultProxy:
         return {
             "core": self._upstream,
             "rewrite_signup": self._rewrite_signup,
-            "signup_mock": {"status": self._signup_mock[0], "body": self._signup_mock[1]}
+            "signup_mock": {
+                "status": self._signup_mock[0],
+                "body": self._signup_mock[1],
+                "verify": {"status": self._verify_mock[0], "body": self._verify_mock[1]}
+                if self._verify_mock
+                else None,
+            }
             if self._signup_mock
             else None,
             "signup_as_login": self._signup_login[0] if self._signup_login else None,  # login only

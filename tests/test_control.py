@@ -48,7 +48,7 @@ def test_set_mock_valid_and_status():
     p = SignalingFaultProxy()
     p._set_mock((200, '{"otp_id": "x"}'))
     assert p._signup_mock == (200, '{"otp_id": "x"}')
-    assert p._status()["signup_mock"] == {"status": 200, "body": '{"otp_id": "x"}'}
+    assert p._status()["signup_mock"] == {"status": 200, "body": '{"otp_id": "x"}', "verify": None}
     p._set_mock(None)
     assert p._signup_mock is None
 
@@ -92,6 +92,55 @@ def test_otp_mock_replays_the_login_on_verify():
         "login": "acc",
         "password": "pw",
     }
+
+
+def test_otp_mock_answers_verify_with_its_verify_answer():
+    p = SignalingFaultProxy()
+    refusal = '{"code": "device_limit_reached"}'
+    p._set_mock((200, '{"otp_id": "x"}'), verify=(409, refusal))
+    signup = Request.make(
+        "POST",
+        "http://h/api/v1/user",
+        json.dumps({"login": "acc", "password": "pw"}),
+        {"content-type": "application/json"},
+    )
+    assert p._mock_response(signup).status_code == 200
+    verify = Request.make(
+        "POST", "http://h/api/v1/session/otp-verify", json.dumps({"otp_id": "x", "code": "1"})
+    )
+    answer = p._mock_response(verify)
+    assert answer is not None and answer.status_code == 409  # not replayed as a login
+    assert json.loads(answer.get_text()) == {"code": "device_limit_reached"}
+    assert verify.path == "/api/v1/session/otp-verify"
+    assert p._status()["signup_mock"]["verify"] == {"status": 409, "body": refusal}
+
+
+def test_verify_answer_needs_an_otp_mock():
+    p = SignalingFaultProxy()
+    with pytest.raises(ValueError):
+        p._set_mock((409, '{"code": "device_limit_reached"}'), verify=(409, "{}"))
+    with pytest.raises(ValueError):
+        p._set_mock((200, '{"otp_id": "x"}'), verify=(409, "not json"))
+
+
+def test_control_mock_takes_the_verify_answer_and_a_new_mock_drops_it():
+    from mitmproxy.test import tflow
+
+    p = SignalingFaultProxy()
+    control = tflow.tflow(
+        req=Request.make(
+            "GET",
+            "http://127.0.0.1:8080/__proxy/mock?status=200&body=%7B%22otp_id%22%3A%22x%22%7D"
+            "&verify_status=409&verify_body=%7B%22code%22%3A%22device_limit_reached%22%7D",
+        )
+    )
+    p.request(control)
+    assert control.response.status_code == 200
+    assert json.loads(control.response.get_text())["signup_mock"]["verify"]["status"] == 409
+    p.request(
+        tflow.tflow(req=Request.make("GET", "http://127.0.0.1:8080/__proxy/mock?status=409&body=%7B%7D"))
+    )
+    assert p._verify_mock is None
 
 
 def test_non_otp_mock_leaves_verify_alone():
