@@ -106,5 +106,11 @@ vendor page on `/complete` made it post `signup` again 2/2.
 
 - The form page keeps one Submit button for all its methods; its own "Back" link hides it without
   clearing the spinner, so only the app can make it usable again.
-- A page that defines `window.onSignupResult(result)` could clear its own state if the app called
-  it (WebTrit's example page already does); the app does not call it today.
+- The fix (WT-2147, on review) answers the page after every signup that ends without a session, the
+  way the embedded resource's `resultStrategy` says: back in the page's history by default, or -
+  with `resultStrategy: notify` - by calling `window.onWebTritResult(result)`, where `result` is
+  `{"channel": "WebtritLoginChannel", "event": "signup", "ok": false, "reason": "device_limit"}`
+  (reasons `device_limit`, `device_switch_limit`, `request_failed`, `unsupported_backend`). The
+  form page here defines it: the spinner stops, the form keeps what was typed and the reason shows
+  above Submit. The contract is the app's `docs/reference/application_embedded_config.md`
+  ("Request Results").

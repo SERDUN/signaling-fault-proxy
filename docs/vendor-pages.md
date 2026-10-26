@@ -37,7 +37,7 @@ Download the page and its bundle into a scratch directory (never into the repo y
 it meets the app - before clicking anything:
 
 ```sh
-grep -o 'Webtrit[A-Za-z]*Channel\|window\.on[A-Z][A-Za-z]*\|onSignupResult\|initializePage' bundle.js | sort | uniq -c
+grep -o 'Webtrit[A-Za-z]*Channel\|window\.on[A-Z][A-Za-z]*\|onWebTritResult\|onSignupResult\|initializePage' bundle.js | sort | uniq -c
 ```
 
 Write down, for the page's README ("App contract"): what it posts on which channel and when; which

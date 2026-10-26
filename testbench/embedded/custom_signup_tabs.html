@@ -90,6 +90,7 @@
     <p class="desc" id="fieldsDesc"></p>
     <div id="fieldHost"></div>
     <p class="note hidden" id="fieldsNote"></p>
+    <p class="note hidden" id="signupResult" style="background:#fdecea;border-color:#f5c2c0"></p>
   </div>
 </section>
 
@@ -218,9 +219,25 @@
       if (f.required && !v) { $("f_" + f.name).focus(); return; }
       if (v || !f.optional) data[f.name] = v;   // omit empty optional fields (e.g. login/password)
     }
+    $("signupResult").classList.add("hidden");
     $("submit").classList.add("loading"); $("submit").disabled = true;
     WebtritLoginChannel.postMessage(JSON.stringify({ event: "signup", data }));
   });
+
+  // The app answers a signup that ended without a session (signupEndStrategy: notify).
+  const REASONS = {
+    device_limit: "This account is signed in on as many devices as it is allowed.",
+    device_switch_limit: "This account has run out of new devices for now.",
+    request_failed: "The sign-in failed. Try again.",
+    unsupported_backend: "This server is not supported by the app.",
+  };
+  window.onWebTritResult = function (result) {
+    if (!result || result.channel !== "WebtritLoginChannel" || result.event !== "signup") return;
+    $("submit").classList.remove("loading"); $("submit").disabled = false;
+    const box = $("signupResult");
+    box.textContent = REASONS[result && result.reason] || REASONS.request_failed;
+    box.classList.remove("hidden");
+  };
 
   // The app injects safe-area insets (and theme) through this on load and on rotation.
   // Values are logical pixels, which map straight to CSS px.
