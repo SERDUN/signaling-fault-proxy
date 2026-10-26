@@ -56,7 +56,9 @@ The stub Core is then not started; everything else is the same. Ports can be ove
 - `embedded/custom_signup_tabs.html` - a richer demo: tabs, a login-method list (each naming the API
   call it represents), and a two-step Custom signup whose form has the predefined fields plus an
   optional login/password - left blank the proxy uses its own account, filled it signs in as that one.
-  It reads the app's `onMediaQueryReady` for safe-area insets. This is the page used on a phone.
+  It reads the app's `onMediaQueryReady` for safe-area insets, and takes the app's answer to its
+  signup in `onWebTritResult` (a resource with `resultStrategy: notify`): the spinner stops, the form
+  stays as it was and the reason shows above Submit. This is the page used on a phone.
 - `client.html` - injects `WebtritLoginChannel` into that page (as the app injects it into its WebView),
   turns the signup message into the `POST /api/v1/user` the app's api client would send, then enters
   the session with the returned token, and shows every request and reply.
@@ -83,6 +85,7 @@ drives the app. These ids are a contract: a case relies on them, so they are not
 | `f_<field>` (`f_email`, `f_full_name`, `f_clinic`, `f_login`, `f_password`) | the fields of the open method |
 | `submit` | the Submit button: `enabled="false"` while the page waits for the app after a submit |
 | `backBtn` | the page's own "Back" link to the method cards |
+| `signupResult` | the reason of a refused signup, shown when the app tells the page (`onWebTritResult`) |
 | `tabLoginBtn` | the "Sign in" tab |
 
 ## Tenant
