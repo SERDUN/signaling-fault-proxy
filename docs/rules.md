@@ -34,6 +34,7 @@ the connection. Both take:
 | `name` | the frame's type: `update`, `ice_trickle`, `hold`, `ack`, `keepalive`, `accepted`, ... | any |
 | `after` | act only once a frame of this name has passed (either way) | - |
 | `times` | how many matching frames to act on before lifting itself; `0` - until lifted | `1` |
+| `connection` | `one` - act only on the connection the rule started on (the one of the `after` frame, or of the first matching frame); a connection made later passes untouched | every connection |
 
 Examples:
 
@@ -42,6 +43,8 @@ Examples:
 curl 'http://127.0.0.1:8080/__proxy/arm?rule=drop-on&from=app&name=hold'
 # Core's keepalive answers are lost until lifted - the client's keepalive times out
 curl 'http://127.0.0.1:8080/__proxy/arm?rule=drop-on&from=core&name=keepalive&times=0'
+# after the next update Core's frames are lost on that connection only - a connection the client makes next works
+curl 'http://127.0.0.1:8080/__proxy/arm?rule=drop-on&from=core&after=update&times=0&connection=one'
 # the socket goes when Core sends the answer to an ICE restart
 curl 'http://127.0.0.1:8080/__proxy/arm?rule=close-on&from=core&name=accepted&after=update'
 ```

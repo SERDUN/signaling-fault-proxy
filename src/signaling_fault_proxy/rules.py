@@ -34,19 +34,20 @@ class Frame:
     name: str | None  # the request / response / event / handshake type, e.g. "update"
     transaction: str | None
     body: dict[str, Any] | None
+    connection: str | None = None  # the signaling connection it came on; None when not known
 
     @classmethod
-    def parse(cls, from_client: bool, text: str) -> Frame:
+    def parse(cls, from_client: bool, text: str, connection: str | None = None) -> Frame:
         try:
             body = json.loads(text)
         except ValueError:
-            return cls(from_client, None, None, None, None)
+            return cls(from_client, None, None, None, None, connection)
         if not isinstance(body, dict):
-            return cls(from_client, None, None, None, None)
+            return cls(from_client, None, None, None, None, connection)
         for kind in ("request", "response", "event", "handshake"):
             if kind in body:
-                return cls(from_client, kind, str(body[kind]), body.get("transaction"), body)
-        return cls(from_client, None, None, body.get("transaction"), body)
+                return cls(from_client, kind, str(body[kind]), body.get("transaction"), body, connection)
+        return cls(from_client, None, None, body.get("transaction"), body, connection)
 
     def describe(self) -> str:
         arrow = "app -> core" if self.from_client else "core -> app"
@@ -135,6 +136,9 @@ class Match(Rule):
     name      the frame's type, e.g. "update", "ice_trickle", "ack", or "" for any
     after     only once a frame of this name has passed (either way), e.g. "update"
     times     how many matching frames to act on before lifting itself; 0 - until lifted
+    connection  "one" - only on the connection the rule started on: the one of the `after` frame,
+              or of the first matching frame; other connections, the next one of a client that
+              reconnects among them, pass untouched. "" - on every connection
     """
 
     from_: str = ""
@@ -142,13 +146,26 @@ class Match(Rule):
     name_: str = ""
     after: str = ""
     times: int = 1
+    connection: str = ""
     _seen_after: bool = field(default=False, init=False)
     _acted: int = field(default=0, init=False)
+    _bound: bool = field(default=False, init=False)
+    _on: str | None = field(default=None, init=False)
 
     action: ClassVar[Action] = Action.PASS
 
     def __post_init__(self) -> None:
+        if self.connection not in ("", "one"):
+            raise ValueError(f"connection is 'one' or empty, not {self.connection!r}")
         self.one_shot = self.times > 0
+
+    def _elsewhere(self, frame: Frame) -> bool:
+        """Whether `frame` came on another connection than the one the rule is bound to."""
+        return self.connection == "one" and self._bound and frame.connection != self._on
+
+    def _bind(self, frame: Frame) -> None:
+        if self.connection == "one" and not self._bound:
+            self._bound, self._on = True, frame.connection
 
     def matches(self, frame: Frame) -> bool:
         if self.from_ and (frame.from_client != (self.from_ == "app")):
@@ -161,9 +178,11 @@ class Match(Rule):
         if self.after and not self._seen_after:
             if frame.name == self.after:
                 self._seen_after = True
+                self._bind(frame)
             return Action.PASS
-        if not self.matches(frame):
+        if self._elsewhere(frame) or not self.matches(frame):
             return Action.PASS
+        self._bind(frame)
         self._acted += 1
         if self.times and self._acted >= self.times:
             self.fired = True

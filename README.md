@@ -54,7 +54,7 @@ curl 'http://127.0.0.1:8080/__proxy/arm?rule=drop-on&from=core&name=keepalive&ti
 
 | Rule | What it does | Lifts |
 |---|---|---|
-| `close-on` | closes the connection on the matching frame (`from`, `kind`, `name`, `after`, `times`) | after `times` frames (1); `times=0` - when lifted |
+| `close-on` | closes the connection on the matching frame (`from`, `kind`, `name`, `after`, `times`, `connection`) | after `times` frames (1); `times=0` - when lifted |
 | `drop-on` | drops the matching frames, the connection stays | the same |
 | `close-trickle-after-update` | after the app sends `update` (an ICE restart offer, say), the first candidate it trickles closes the connection before the candidate reaches Core | itself, once fired |
 | `blackhole` | a silent loss of the signaling: every frame both ways is dropped, nothing is closed, requests wait | when lifted |
@@ -97,7 +97,7 @@ app -> core request:ice_trickle tx=transaction-4037598838  [close by close-trick
 ```
 
 ```json
-{"t": 1792663816.426, "from_client": true, "kind": "request", "name": "ice_trickle", "transaction": "transaction-4037598838", "action": "close", "rule": "close-trickle-after-update"}
+{"t": 1792663816.426, "from_client": true, "kind": "request", "name": "ice_trickle", "transaction": "transaction-4037598838", "connection": "3c1f...", "action": "close", "rule": "close-trickle-after-update"}
 {"t": 1792663816.427, "note": "signaling closed (code 1006)"}
 ```
 
@@ -134,6 +134,8 @@ linked from a review or a ticket - the list and how to add one: [docs/reproduce]
   (WT-2071) - script: [`scripts/android-ice-restart-on-wifi-off.sh`](scripts/android-ice-restart-on-wifi-off.sh)
 - [Embedded login page stuck after a device-limit refusal](docs/reproduce/embedded-page-stuck-after-device-limit.md)
   Core's refusals from `/__proxy/mock`, with our form page or a [vendor page](docs/vendor-pages.md)
+- [Silent replies while the app retries a request](docs/reproduce/silent-replies-while-a-request-is-retried.md)
+  `drop-on` after an `update`, on every connection or only on that one (`connection=one`)
 
 ## Options
 

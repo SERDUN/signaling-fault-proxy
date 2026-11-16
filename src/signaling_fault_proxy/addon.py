@@ -339,7 +339,7 @@ class SignalingFaultProxy:
         message = flow.websocket.messages[-1]
         if not message.is_text:
             return
-        frame = Frame.parse(message.from_client, message.text)
+        frame = Frame.parse(message.from_client, message.text, flow.client_conn.id)
         action, by = self.rules.on_frame(frame)
         self._record(frame, action, by)
         if action is Action.DROP:
@@ -374,6 +374,7 @@ class SignalingFaultProxy:
                         "kind": frame.kind,
                         "name": frame.name,
                         "transaction": frame.transaction,
+                        "connection": frame.connection,
                         "action": action.value,
                         "rule": by,
                     }

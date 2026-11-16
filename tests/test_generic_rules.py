@@ -62,6 +62,7 @@ def test_a_rule_describes_its_parameters():
             "name": "hold",
             "after": "",
             "times": 1,
+            "connection": "",
         }
     ]
 
@@ -77,3 +78,43 @@ def test_a_rules_file_registers_its_rules():
     assert rules.on_frame(app("hold", tx="h1"))[0] is Action.PASS
     assert rules.on_frame(core("response", "ack", tx="h1"))[0] is Action.DROP
     assert rules.on_frame(core("response", "ack", tx="other"))[0] is Action.PASS
+
+
+def on(connection: str, frame: Frame) -> Frame:
+    return Frame(frame.from_client, frame.kind, frame.name, frame.transaction, frame.body, connection)
+
+
+def test_drop_on_one_connection_leaves_the_next_one_alone():
+    rules = Rules()
+    rules.arm("drop-on", {"from": "core", "after": "update", "times": "0", "connection": "one"})
+
+    assert rules.on_frame(on("a", core("handshake", "state")))[0] is Action.PASS
+    assert rules.on_frame(on("a", app("update")))[0] is Action.PASS
+    assert rules.on_frame(on("a", core("response", "ack")))[0] is Action.DROP
+    assert rules.on_frame(on("b", core("handshake", "state")))[0] is Action.PASS, "a new connection"
+    assert rules.on_frame(on("b", core("response", "ack")))[0] is Action.PASS
+    assert rules.on_frame(on("a", core("event", "accepted")))[0] is Action.DROP, "still the old one"
+    assert rules.armed == ["drop-on"]
+
+
+def test_one_connection_without_after_is_the_one_of_the_first_match():
+    rules = Rules()
+    rules.arm("drop-on", {"from": "core", "name": "keepalive", "times": "0", "connection": "one"})
+
+    assert rules.on_frame(on("a", core("response", "ack")))[0] is Action.PASS, "not a match: no binding"
+    assert rules.on_frame(on("b", core("handshake", "keepalive")))[0] is Action.DROP
+    assert rules.on_frame(on("a", core("handshake", "keepalive")))[0] is Action.PASS
+    assert rules.on_frame(on("b", core("handshake", "keepalive")))[0] is Action.DROP
+
+
+def test_every_connection_by_default():
+    rules = Rules()
+    rules.arm("drop-on", {"from": "core", "after": "update", "times": "0"})
+
+    assert rules.on_frame(on("a", app("update")))[0] is Action.PASS
+    assert rules.on_frame(on("b", core("handshake", "state")))[0] is Action.DROP
+
+
+def test_an_unknown_connection_scope_is_refused():
+    with pytest.raises(ValueError, match="connection"):
+        build("drop-on", {"connection": "first"})
