@@ -134,6 +134,8 @@ linked from a review or a ticket - the list and how to add one: [docs/reproduce]
   (WT-2071) - script: [`scripts/android-ice-restart-on-wifi-off.sh`](scripts/android-ice-restart-on-wifi-off.sh)
 - [Embedded login page stuck after a device-limit refusal](docs/reproduce/embedded-page-stuck-after-device-limit.md)
   Core's refusals from `/__proxy/mock`, with our form page or a [vendor page](docs/vendor-pages.md)
+- [Silent replies while the app retries a request](docs/reproduce/silent-replies-while-a-request-is-retried.md)
+  `drop-on` after an `update`, on every connection or only on that one (`connection=one`)
 
 ## Options
 
