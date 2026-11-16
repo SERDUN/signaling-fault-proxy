@@ -18,8 +18,8 @@ phone still shows it. That loss is hard to make by hand; the proxy makes the sig
 demand. The iPhone does not show it: its socket goes down by itself about 18 s after the
 unanswered request.
 
-The fix watches what the client receives: nothing heard for the keepalive interval sends the
-keepalive at once, whatever is being sent meanwhile; no answer in 10 s gives the connection up and
+The fix watches what the client receives: nothing heard for the keepalive interval (the one Core
+names in its state handshake) sends the keepalive at once, whatever is being sent meanwhile; no answer within one request timeout gives the connection up and
 the requests waiting on it end at once. A keepalive answered before the state handshake gives the
 connection up too, since Core always sends the state first.
 
@@ -95,12 +95,13 @@ FINE WebtritSignalingClient - 1 keepalive timer scheduled: 0:00:30.000000
 The far end does not hear the user until the rule is lifted, with either scope; after the lift the
 retried `update` is answered on the same connection and the audio comes back.
 
-**A fixed build**: about 30 s after the last frame it received, the app sends `keepalive`; 10 s later
-it gives the connection up (`SignalingKeepaliveTimeoutException`) and connects again 3 s after that.
+**A fixed build**: one keepalive interval after the last frame it received, the app sends `keepalive`;
+one request timeout later it gives the connection up (`SignalingKeepaliveTimeoutException`) and connects again 3 s after that.
 
 - `connection=one`: the new connection gets its state, the app replays its kept offer (`replaying the
   pending local offer` in its log) and the far end
-  hears the user again some 43 s after the first dropped frame, with the rule still armed.
+  hears the user again about the interval plus the timeout and a reconnect after the first dropped frame (43 s with a
+  30 s interval), with the rule still armed.
 - every connection: each new connection loses its state too and is given up in turn, either by a
   keepalive with no answer or by one answered before the state
   (`SignalingStateHandshakeMissingException`). After the lift the next connection gets its state,
@@ -108,7 +109,8 @@ it gives the connection up (`SignalingKeepaliveTimeoutException`) and connects a
 
 ## Seen
 
-2026-11-11 and 2026-11-12, an Android 15 phone on USB, the far end a SIP party, the same Core:
+2026-11-11 and 2026-11-12, an Android 15 phone on USB, the far end a SIP party, the same Core,
+which named a 30 s keepalive interval; the app's request timeout is 10 s:
 
 | Build | Scope | In the three minutes | After the lift |
 |---|---|---|---|
